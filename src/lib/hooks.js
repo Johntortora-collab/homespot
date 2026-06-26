@@ -553,6 +553,36 @@ export function useIsAdmin() {
   return profile?.is_admin === true
 }
 
+// ── Founder badge: first 50 signups ───────────────────────────────────────────
+export function useFounderStatus() {
+  const { session } = useAuth()
+  const [status, setStatus] = useState({ isFounder: false, rank: null, claimed: 0, loading: true })
+
+  useEffect(() => {
+    if (!session) { setStatus(s => ({ ...s, loading: false })); return }
+    let cancelled = false
+
+    async function load() {
+      const [mine, count] = await Promise.all([
+        supabase.rpc('my_founder_status'),
+        supabase.rpc('founder_count'),
+      ])
+      if (cancelled) return
+      const row = mine.data?.[0]
+      setStatus({
+        isFounder: row?.is_founder ?? false,
+        rank:      row?.signup_rank ?? null,
+        claimed:   count.data ?? 0,
+        loading:   false,
+      })
+    }
+    load()
+    return () => { cancelled = true }
+  }, [session])
+
+  return status
+}
+
 // ── Admin: manage all spots (moderation) ──────────────────────────────────────
 export function useAdminSpots() {
   const [spots,   setSpots]   = useState([])

@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react'
 import { useParams } from 'react-router-dom'
 import { useAuth } from '../../lib/AuthContext'
-import { useSpots, useStamp, useFeedback, useMyCards, useBlockFeed, useTowns, useTownRequest } from '../../lib/hooks'
+import { useSpots, useStamp, useFeedback, useMyCards, useBlockFeed, useTowns, useTownRequest, useFounderStatus } from '../../lib/hooks'
 import { supabase } from '../../lib/supabase'
 import { getMascot, getUnlockLabel, TOTAL_LAYERS } from '../../lib/mascotEngine'
 import Mascot from '../../components/Mascot'
@@ -882,6 +882,8 @@ function Block({ townId, town }) {
 function Profile({ onSwitch, onNav }) {
   const { profile, signOut } = useAuth()
   const [shareMsg, setShareMsg] = useState('')
+  const founder = useFounderStatus()
+  const spotsLeft = Math.max(0, 50 - founder.claimed)
 
   async function handleInvite() {
     const shareUrl = window.location.origin
@@ -912,12 +914,29 @@ function Profile({ onSwitch, onNav }) {
   return (
     <div style={{ height:'100%', overflowY:'auto', background:C.bg }}>
       <div style={{ background:'linear-gradient(160deg,#2A1F42,#13131F 60%)', padding:'24px 16px 28px', textAlign:'center' }}>
-        <div style={{ width:64, height:64, borderRadius:'50%', background:`linear-gradient(135deg,${C.amber},#E8956D)`, display:'flex', alignItems:'center', justifyContent:'center', fontSize:28, margin:'0 auto 12px' }}>
+        <div style={{
+          width:64, height:64, borderRadius:'50%',
+          background:`linear-gradient(135deg,${C.amber},#E8956D)`,
+          display:'flex', alignItems:'center', justifyContent:'center', fontSize:28, margin:'0 auto 12px',
+          boxShadow: founder.isFounder ? '0 0 0 3px #13131F, 0 0 0 5px #F5C542, 0 0 22px rgba(245,197,66,0.5)' : 'none',
+        }}>
           {profile?.avatar||'🧑'}
         </div>
         <div style={{ fontFamily:'Fraunces,serif', fontSize:18, color:'#fff', fontWeight:600 }}>{profile?.full_name||'Homespotter'}</div>
-        <div style={{ fontSize:12, color:C.amber, marginTop:4 }}>Homespotter{profile?.towns?.name ? ` · ${profile.towns.name}` : ''}</div>
-        <button onClick={onSwitch} style={{ marginTop:10, background:C.amberDim, border:`1px solid ${C.amberBrd}`, borderRadius:20, padding:'5px 14px', fontSize:11, color:C.amber, cursor:'pointer', fontWeight:600 }}>📍 Switch town</button>
+
+        {founder.isFounder ? (
+          <div style={{ display:'inline-flex', alignItems:'center', gap:6, marginTop:8, background:'linear-gradient(135deg,rgba(245,197,66,0.18),rgba(245,166,35,0.12))', border:'1px solid rgba(245,197,66,0.45)', borderRadius:20, padding:'5px 13px' }}>
+            <span style={{ fontSize:13 }}>⭐</span>
+            <span style={{ fontSize:11.5, fontWeight:700, color:'#F5C542', letterSpacing:'0.04em' }}>FOUNDING MEMBER</span>
+            {founder.rank != null && <span style={{ fontSize:10, color:'rgba(245,197,66,0.6)' }}>#{founder.rank}</span>}
+          </div>
+        ) : (
+          <div style={{ fontSize:12, color:C.amber, marginTop:4 }}>Homespotter{profile?.towns?.name ? ` · ${profile.towns.name}` : ''}</div>
+        )}
+
+        <div style={{ marginTop:10 }}>
+          <button onClick={onSwitch} style={{ background:C.amberDim, border:`1px solid ${C.amberBrd}`, borderRadius:20, padding:'5px 14px', fontSize:11, color:C.amber, cursor:'pointer', fontWeight:600 }}>📍 Switch town</button>
+        </div>
       </div>
       <div style={{ padding:'16px 16px 100px' }}>
         {shareMsg && (
@@ -925,6 +944,33 @@ function Profile({ onSwitch, onNav }) {
             ✓ {shareMsg}
           </div>
         )}
+
+        {/* Founder status card */}
+        {!founder.loading && founder.isFounder && (
+          <div style={{ background:'linear-gradient(135deg,rgba(245,197,66,0.12),rgba(245,166,35,0.06))', border:'1px solid rgba(245,197,66,0.35)', borderRadius:14, padding:'15px 16px', marginBottom:12 }}>
+            <div style={{ display:'flex', alignItems:'center', gap:9, marginBottom:6 }}>
+              <span style={{ fontSize:18 }}>⭐</span>
+              <span style={{ fontFamily:'Fraunces,serif', fontSize:15, fontWeight:700, color:'#F5C542' }}>You're a Homespot Founder</span>
+            </div>
+            <div style={{ fontSize:12.5, color:'rgba(255,255,255,0.6)', lineHeight:1.55 }}>
+              You're one of the first 50 people to join Homespot in your town. Thanks for being here early — your founder badge is permanent.
+            </div>
+          </div>
+        )}
+
+        {/* Incentive card for non-founders while spots remain */}
+        {!founder.loading && !founder.isFounder && spotsLeft > 0 && (
+          <div onClick={handleInvite} style={{ background:C.card, border:'1px dashed rgba(245,197,66,0.4)', borderRadius:14, padding:'15px 16px', marginBottom:12, cursor:'pointer' }}>
+            <div style={{ display:'flex', alignItems:'center', gap:9, marginBottom:5 }}>
+              <span style={{ fontSize:17 }}>⭐</span>
+              <span style={{ fontFamily:'Fraunces,serif', fontSize:14.5, fontWeight:700, color:'#fff' }}>Only {spotsLeft} Founder {spotsLeft === 1 ? 'spot' : 'spots'} left</span>
+            </div>
+            <div style={{ fontSize:12.5, color:'rgba(255,255,255,0.55)', lineHeight:1.55 }}>
+              The first 50 members get a permanent Founder badge. Invite friends to help grow your town →
+            </div>
+          </div>
+        )}
+
         {items.map(([l,ic,onClick])=>(
           <div key={l} onClick={onClick} style={{ background:C.card, border:`1px solid ${C.border}`, borderRadius:12, padding:'13px 15px', marginBottom:8, display:'flex', alignItems:'center', gap:12, cursor:'pointer' }}>
             <div style={{ width:34, height:34, borderRadius:9, background:C.card2, display:'flex', alignItems:'center', justifyContent:'center', fontSize:16 }}>{ic}</div>
