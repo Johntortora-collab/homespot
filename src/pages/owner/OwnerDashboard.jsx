@@ -370,7 +370,7 @@ function SendOfferPage({ spot }) {
       <div style={{ background:C.sageSoft, border:`1px solid ${C.sage}40`, borderRadius:16, padding:'32px', textAlign:'center' }}>
         <div style={{ fontSize:44, marginBottom:12 }}>🎉</div>
         <div style={{ fontFamily:'Fraunces,serif', fontSize:20, fontWeight:700, color:C.ink, marginBottom:6 }}>Your offer is live</div>
-        <div style={{ fontSize:14, color:C.mid }}>Customers can see it on The Block and got a push notification.</div>
+        <div style={{ fontSize:14, color:C.mid }}>Customers can see it on Main Street and got a push notification.</div>
         <button onClick={()=>setMessage('')} style={{ marginTop:20, background:C.amber, border:'none', borderRadius:11, padding:'11px 24px', fontSize:14, fontWeight:600, color:C.navy, cursor:'pointer' }}>Send another</button>
       </div>
     </div>

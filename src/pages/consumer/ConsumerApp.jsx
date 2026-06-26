@@ -852,15 +852,15 @@ function Block({ townId, town }) {
     <div style={{ height:'100%', overflowY:'auto', background:C.bg }}>
       <div style={{ padding:'20px 16px 4px' }}>
         <TownPill>{town?.name || 'Your town'}</TownPill>
-        <h2 style={{ fontFamily:'Fraunces,serif', fontSize:24, color:'#fff', marginTop:6 }}>The <span style={{ color:'#7BA05B', fontStyle:'italic' }}>Block</span></h2>
+        <h2 style={{ fontFamily:'Fraunces,serif', fontSize:24, color:'#fff', marginTop:6 }}>Main <span style={{ color:'#7BA05B', fontStyle:'italic' }}>Street</span></h2>
         <p style={{ fontSize:12, color:'#555', marginTop:4 }}>What's happening in your town</p>
       </div>
       <div style={{ padding:'14px 16px 100px' }}>
         {loading ? <div style={{ textAlign:'center', padding:'40px', color:C.dim }}>Loading…</div>
         : feed.length === 0 ? (
           <div style={{ textAlign:'center', padding:'48px 24px' }}>
-            <div style={{ fontSize:36, marginBottom:12 }}>📣</div>
-            <div style={{ fontFamily:'Fraunces,serif', fontSize:18, color:'#fff', marginBottom:6 }}>Nothing yet</div>
+            <div style={{ fontSize:36, marginBottom:12 }}>🏘️</div>
+            <div style={{ fontFamily:'Fraunces,serif', fontSize:18, color:'#fff', marginBottom:6 }}>Quiet on Main Street</div>
             <div style={{ fontSize:13, color:'#555' }}>Activity from local spots will appear here as people visit and businesses send offers.</div>
           </div>
         ) : feed.map((item,i)=>(
@@ -905,8 +905,7 @@ function Profile({ onSwitch, onNav }) {
 
   const items = [
     ['My Spot Cards','🗂', () => onNav('perks','perks')],
-    ['Activity Feed','📣', () => onNav('block','block')],
-    ['Notifications','🔔', () => onNav('block','block')],
+    ['Main Street','🏘️', () => onNav('block','block')],
     ['Invite Friends','💌', handleInvite],
   ]
 
@@ -948,7 +947,7 @@ function Nav({ tab, onTab, onScan }) {
     {id:'home',    label:'Home',  icon:'⌂',  sc:'home'},
     {id:'perks',   label:'Perks', icon:'✦',  sc:'perks'},
     {id:'scan',    label:'',      icon:'⬡',  sc:null, center:true},
-    {id:'block',   label:'Block', icon:'📣', sc:'block'},
+    {id:'block',   label:'Main St', icon:'🏘️', sc:'block'},
     {id:'profile', label:'You',   icon:'◎',  sc:'profile'},
   ]
   return (

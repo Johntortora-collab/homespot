@@ -400,7 +400,7 @@ export function useOwnerFeedback(spotId) {
   return { feedback, loading, markRead }
 }
 
-// ── The Block feed (recent activity across a town) ────────────────────────────
+// ── Main Street feed (recent activity across a town) ─────────────────────────
 export function useBlockFeed(townId) {
   const [feed,    setFeed]    = useState([])
   const [loading, setLoading] = useState(true)
