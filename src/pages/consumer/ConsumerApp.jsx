@@ -200,7 +200,7 @@ export default function ConsumerApp() {
           {screen==='spot'       && <SpotDetail spotId={spotId} onBack={goHome}/>}
           {screen==='perks'      && <Perks onSpot={openSpot}/>}
           {screen==='block'      && <Block townId={townId} town={townData}/>}
-          {screen==='profile'    && <Profile onSwitch={()=>setScreen('townselect')} onSignOut={signOut}/>}
+          {screen==='profile'    && <Profile onSwitch={()=>setScreen('townselect')} onNav={nav}/>}
         </div>
 
         {/* Bottom nav */}
@@ -879,8 +879,37 @@ function Block({ townId, town }) {
 }
 
 // ── PROFILE ───────────────────────────────────────────────────────────────────
-function Profile({ onSwitch }) {
+function Profile({ onSwitch, onNav }) {
   const { profile, signOut } = useAuth()
+  const [shareMsg, setShareMsg] = useState('')
+
+  async function handleInvite() {
+    const shareUrl = window.location.origin
+    const shareData = {
+      title: 'Homespot',
+      text: `Join me on Homespot — earn perks at our local spots in ${profile?.towns?.name || 'town'}!`,
+      url: shareUrl,
+    }
+    try {
+      if (navigator.share) {
+        await navigator.share(shareData)
+      } else {
+        await navigator.clipboard.writeText(shareUrl)
+        setShareMsg('Link copied!')
+        setTimeout(() => setShareMsg(''), 2000)
+      }
+    } catch (e) {
+      // user cancelled the share sheet — nothing to do
+    }
+  }
+
+  const items = [
+    ['My Spot Cards','🗂', () => onNav('perks','perks')],
+    ['Activity Feed','📣', () => onNav('block','block')],
+    ['Notifications','🔔', () => onNav('block','block')],
+    ['Invite Friends','💌', handleInvite],
+  ]
+
   return (
     <div style={{ height:'100%', overflowY:'auto', background:C.bg }}>
       <div style={{ background:'linear-gradient(160deg,#2A1F42,#13131F 60%)', padding:'24px 16px 28px', textAlign:'center' }}>
@@ -888,12 +917,17 @@ function Profile({ onSwitch }) {
           {profile?.avatar||'🧑'}
         </div>
         <div style={{ fontFamily:'Fraunces,serif', fontSize:18, color:'#fff', fontWeight:600 }}>{profile?.full_name||'Homespotter'}</div>
-        <div style={{ fontSize:12, color:C.amber, marginTop:4 }}>Homespotter</div>
+        <div style={{ fontSize:12, color:C.amber, marginTop:4 }}>Homespotter{profile?.towns?.name ? ` · ${profile.towns.name}` : ''}</div>
         <button onClick={onSwitch} style={{ marginTop:10, background:C.amberDim, border:`1px solid ${C.amberBrd}`, borderRadius:20, padding:'5px 14px', fontSize:11, color:C.amber, cursor:'pointer', fontWeight:600 }}>📍 Switch town</button>
       </div>
       <div style={{ padding:'16px 16px 100px' }}>
-        {[['My Spot Cards','🗂'],['Visit History','📋'],['Notifications','🔔'],['Invite Friends','💌']].map(([l,ic])=>(
-          <div key={l} style={{ background:C.card, border:`1px solid ${C.border}`, borderRadius:12, padding:'13px 15px', marginBottom:8, display:'flex', alignItems:'center', gap:12, cursor:'pointer' }}>
+        {shareMsg && (
+          <div style={{ background:'rgba(123,160,91,0.12)', border:`1px solid ${C.sage}40`, borderRadius:10, padding:'10px 14px', fontSize:13, color:C.sage, marginBottom:10, textAlign:'center' }}>
+            ✓ {shareMsg}
+          </div>
+        )}
+        {items.map(([l,ic,onClick])=>(
+          <div key={l} onClick={onClick} style={{ background:C.card, border:`1px solid ${C.border}`, borderRadius:12, padding:'13px 15px', marginBottom:8, display:'flex', alignItems:'center', gap:12, cursor:'pointer' }}>
             <div style={{ width:34, height:34, borderRadius:9, background:C.card2, display:'flex', alignItems:'center', justifyContent:'center', fontSize:16 }}>{ic}</div>
             <span style={{ fontSize:14, color:'#fff', fontWeight:500 }}>{l}</span>
             <span style={{ color:'#444', fontSize:13, marginLeft:'auto' }}>›</span>
