@@ -242,6 +242,7 @@ export default function ConsumerApp() {
           {screen==='perks'      && <Perks onSpot={openSpot}/>}
           {screen==='block'      && <Block townId={townId} town={townData}/>}
           {screen==='profile'    && <Profile onSwitch={()=>setScreen('townselect')} onNav={nav}/>}
+          {screen==='account'    && <AccountScreen onBack={()=>setScreen('profile')}/>}
         </div>
 
         {/* Bottom nav */}
@@ -990,6 +991,112 @@ function Perks({ onSpot }) {
   )
 }
 
+// ── ACCOUNT & SECURITY ────────────────────────────────────────────────────────
+function AccountScreen({ onBack }) {
+  const { session, updateEmail, updatePassword, authProvider } = useAuth()
+  const isGoogle = authProvider === 'google'
+
+  const [email,  setEmail]  = useState('')
+  const [curPw,  setCurPw]  = useState('')
+  const [newPw,  setNewPw]  = useState('')
+  const [confPw, setConfPw] = useState('')
+  const [busy,   setBusy]   = useState(null)
+  const [msg,    setMsg]    = useState(null)
+
+  const inputStyle = {
+    width:'100%', background:C.card, border:`1px solid ${C.border}`,
+    borderRadius:11, padding:'12px 13px', fontSize:14, color:'#fff',
+  }
+
+  function flash(kind, text) {
+    setMsg({ kind, text })
+    setTimeout(()=>setMsg(null), 5000)
+  }
+
+  async function handleEmail() {
+    const next = email.trim()
+    if (!next || !next.includes('@')) return flash('err', 'Enter a valid email address.')
+    if (next === session?.user?.email)  return flash('err', "That's already your email.")
+    setBusy('email')
+    const { error } = await updateEmail(next)
+    setBusy(null)
+    if (error) return flash('err', error.message)
+    setEmail('')
+    flash('ok', `Check ${next} for a confirmation link. Your current email keeps working until you click it.`)
+  }
+
+  async function handlePassword() {
+    if (newPw.length < 8) return flash('err', 'New password must be at least 8 characters.')
+    if (newPw !== confPw) return flash('err', "New passwords don't match.")
+    if (!curPw)           return flash('err', 'Enter your current password.')
+    setBusy('password')
+    const { error } = await updatePassword({ currentPassword: curPw, newPassword: newPw })
+    setBusy(null)
+    if (error) return flash('err', error.message)
+    setCurPw(''); setNewPw(''); setConfPw('')
+    flash('ok', 'Password updated.')
+  }
+
+  return (
+    <div style={{ height:'100%', overflowY:'auto', background:C.bg }}>
+      <div style={{ padding:'20px 16px 8px' }}>
+        <button onClick={onBack} style={{ background:'rgba(255,255,255,0.08)', border:'none', color:'#fff', fontSize:12, padding:'6px 12px', borderRadius:20, cursor:'pointer', marginBottom:12 }}>← Back</button>
+        <h2 style={{ fontFamily:'Fraunces,serif', fontSize:22, color:'#fff', fontWeight:700 }}>Account &amp; <span style={{ color:C.amber, fontStyle:'italic' }}>Security</span></h2>
+        <p style={{ fontSize:12, color:'#666', marginTop:5 }}>
+          Signed in as <span style={{ color:'#aaa' }}>{session?.user?.email}</span>
+          {isGoogle && <span style={{ marginLeft:6, fontSize:10, background:C.card, border:`1px solid ${C.border}`, borderRadius:20, padding:'2px 7px', color:'#888' }}>via Google</span>}
+        </p>
+      </div>
+
+      <div style={{ padding:'12px 16px 100px' }}>
+        {msg && (
+          <div style={{
+            background: msg.kind==='ok' ? 'rgba(123,160,91,0.13)' : 'rgba(232,149,109,0.13)',
+            border: `1px solid ${msg.kind==='ok' ? 'rgba(123,160,91,0.45)' : 'rgba(232,149,109,0.45)'}`,
+            borderRadius:11, padding:'11px 13px', fontSize:12.5, lineHeight:1.55,
+            color: msg.kind==='ok' ? C.sage : '#E8956D', marginBottom:14,
+          }}>
+            {msg.kind==='ok' ? '✓ ' : '⚠ '}{msg.text}
+          </div>
+        )}
+
+        {isGoogle ? (
+          <div style={{ background:C.card, border:`1px solid ${C.border}`, borderRadius:14, padding:'16px', fontSize:13, color:'#888', lineHeight:1.65 }}>
+            You sign in with Google, so your email and password live there — Homespot never sees them.
+            To change either, update your Google account.
+          </div>
+        ) : (
+          <>
+            <div style={{ background:C.card, border:`1px solid ${C.border}`, borderRadius:14, padding:'16px', marginBottom:12 }}>
+              <div style={{ fontFamily:'Fraunces,serif', fontSize:14, color:'#fff', marginBottom:10 }}>Change email</div>
+              <input type="email" value={email} onChange={e=>setEmail(e.target.value)} placeholder="new@email.com" style={inputStyle}/>
+              <div style={{ fontSize:11, color:'#666', margin:'7px 0 11px', lineHeight:1.5 }}>
+                We'll send a confirmation link to the new address. Nothing changes until you click it.
+              </div>
+              <button onClick={handleEmail} disabled={busy==='email'} style={{ width:'100%', background:C.amber, border:'none', borderRadius:11, padding:'12px', fontSize:13.5, fontWeight:600, color:C.bg, cursor:'pointer' }}>
+                {busy==='email' ? 'Sending…' : 'Update email'}
+              </button>
+            </div>
+
+            <div style={{ background:C.card, border:`1px solid ${C.border}`, borderRadius:14, padding:'16px' }}>
+              <div style={{ fontFamily:'Fraunces,serif', fontSize:14, color:'#fff', marginBottom:10 }}>Change password</div>
+              <div style={{ display:'flex', flexDirection:'column', gap:9 }}>
+                <input type="password" value={curPw} onChange={e=>setCurPw(e.target.value)} placeholder="Current password" autoComplete="current-password" style={inputStyle}/>
+                <input type="password" value={newPw} onChange={e=>setNewPw(e.target.value)} placeholder="New password (8+ characters)" autoComplete="new-password" style={inputStyle}/>
+                <input type="password" value={confPw} onChange={e=>setConfPw(e.target.value)} placeholder="Confirm new password" autoComplete="new-password"
+                  style={{ ...inputStyle, border:`1px solid ${confPw && newPw !== confPw ? 'rgba(232,149,109,0.6)' : C.border}` }}/>
+                <button onClick={handlePassword} disabled={busy==='password'} style={{ background:C.amber, border:'none', borderRadius:11, padding:'12px', fontSize:13.5, fontWeight:600, color:C.bg, cursor:'pointer', marginTop:2 }}>
+                  {busy==='password' ? 'Updating…' : 'Update password'}
+                </button>
+              </div>
+            </div>
+          </>
+        )}
+      </div>
+    </div>
+  )
+}
+
 // ── BLOCK ─────────────────────────────────────────────────────────────────────
 function Block({ townId, town }) {
   const { feed, loading } = useBlockFeed(townId)
@@ -1062,6 +1169,7 @@ function Profile({ onSwitch, onNav }) {
     ['My Spot Cards','🗂', () => onNav('perks','perks')],
     ['Main Street','🏘️', () => onNav('block','block')],
     ['Invite Friends','💌', handleInvite],
+    ['Account & Security','⚙', () => onNav('account','profile')],
   ]
 
   return (

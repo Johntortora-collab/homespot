@@ -1022,6 +1022,8 @@ function SettingsPage({ spot, onSaved }) {
         </button>
       </div>
 
+      <AccountSection />
+
       {/* Danger zone */}
       <div style={{ maxWidth:580, border:'1px solid #FECACA', background:'#FFFBFB', borderRadius:17, padding:'20px 22px' }}>
         <div style={{ fontFamily:'Fraunces,serif', fontSize:15, fontWeight:700, color:'#B91C1C', marginBottom:14 }}>Danger zone</div>
@@ -1070,6 +1072,116 @@ function SettingsPage({ spot, onSaved }) {
           </div>
         )}
       </div>
+    </div>
+  )
+}
+
+// ── ACCOUNT (email + password) ────────────────────────────────────────────────
+function AccountSection() {
+  const { session, updateEmail, updatePassword, authProvider } = useAuth()
+  const isGoogle = authProvider === 'google'
+
+  const [email,   setEmail]   = useState('')
+  const [curPw,   setCurPw]   = useState('')
+  const [newPw,   setNewPw]   = useState('')
+  const [confPw,  setConfPw]  = useState('')
+  const [busy,    setBusy]    = useState(null)   // 'email' | 'password'
+  const [msg,     setMsg]     = useState(null)   // { kind:'ok'|'err', text }
+
+  function flash(kind, text) {
+    setMsg({ kind, text })
+    setTimeout(()=>setMsg(null), 5000)
+  }
+
+  async function handleEmail() {
+    const next = email.trim()
+    if (!next || !next.includes('@')) return flash('err', 'Enter a valid email address.')
+    if (next === session?.user?.email)  return flash('err', "That's already your email.")
+
+    setBusy('email')
+    const { error } = await updateEmail(next)
+    setBusy(null)
+    if (error) return flash('err', error.message)
+    setEmail('')
+    flash('ok', `Check ${next} for a confirmation link. Your current email keeps working until you click it.`)
+  }
+
+  async function handlePassword() {
+    if (newPw.length < 8)   return flash('err', 'New password must be at least 8 characters.')
+    if (newPw !== confPw)   return flash('err', "New passwords don't match.")
+    if (!curPw)             return flash('err', 'Enter your current password.')
+
+    setBusy('password')
+    const { error } = await updatePassword({ currentPassword: curPw, newPassword: newPw })
+    setBusy(null)
+    if (error) return flash('err', error.message)
+    setCurPw(''); setNewPw(''); setConfPw('')
+    flash('ok', 'Password updated.')
+  }
+
+  return (
+    <div style={{ background:C.card, border:`1px solid ${C.border}`, borderRadius:17, padding:'24px', maxWidth:580, marginBottom:20 }}>
+      <div style={{ fontFamily:'Fraunces,serif', fontSize:16, fontWeight:700, color:C.ink, marginBottom:4 }}>Account</div>
+      <div style={{ fontSize:12.5, color:C.muted, marginBottom:18 }}>
+        Signed in as <strong style={{ color:C.ink }}>{session?.user?.email}</strong>
+        {isGoogle && <span style={{ marginLeft:7, fontSize:11, background:C.bg, border:`1px solid ${C.border}`, borderRadius:20, padding:'2px 8px' }}>via Google</span>}
+      </div>
+
+      {msg && (
+        <div style={{
+          background: msg.kind==='ok' ? C.sageSoft : '#FEF2F2',
+          border: `1px solid ${msg.kind==='ok' ? C.sage+'55' : '#FECACA'}`,
+          borderRadius:10, padding:'11px 14px', fontSize:12.5, lineHeight:1.5,
+          color: msg.kind==='ok' ? '#3D6B27' : '#DC2626', marginBottom:16,
+        }}>
+          {msg.kind==='ok' ? '✓ ' : '⚠ '}{msg.text}
+        </div>
+      )}
+
+      {isGoogle ? (
+        <div style={{ background:C.bg, border:`1px solid ${C.border}`, borderRadius:11, padding:'14px 16px', fontSize:12.5, color:C.mid, lineHeight:1.6 }}>
+          You sign in with Google, so your email and password are managed there — Homespot never sees them.
+          To change either, update your Google account.
+        </div>
+      ) : (
+        <>
+          {/* Email */}
+          <Field label="Change email">
+            <div style={{ display:'flex', gap:8, flexWrap:'wrap' }}>
+              <input
+                type="email" value={email} onChange={e=>setEmail(e.target.value)}
+                placeholder="new@email.com"
+                style={{ flex:1, minWidth:190, background:C.bg, border:`1.5px solid ${C.border}`, borderRadius:11, padding:'11px 13px', fontSize:14, color:C.ink }}
+              />
+              <button onClick={handleEmail} disabled={busy==='email'}
+                style={{ background:C.navy, border:'none', borderRadius:10, padding:'11px 18px', fontSize:13, fontWeight:600, color:'#fff', cursor:'pointer', flexShrink:0 }}>
+                {busy==='email' ? 'Sending…' : 'Update'}
+              </button>
+            </div>
+            <div style={{ fontSize:11.5, color:C.muted, marginTop:6 }}>
+              We'll email the new address a confirmation link. Nothing changes until you click it.
+            </div>
+          </Field>
+
+          <div style={{ height:1, background:C.border, margin:'18px 0' }}/>
+
+          {/* Password */}
+          <Field label="Change password">
+            <div style={{ display:'flex', flexDirection:'column', gap:9 }}>
+              <input type="password" value={curPw} onChange={e=>setCurPw(e.target.value)} placeholder="Current password" autoComplete="current-password"
+                style={{ background:C.bg, border:`1.5px solid ${C.border}`, borderRadius:11, padding:'11px 13px', fontSize:14, color:C.ink }}/>
+              <input type="password" value={newPw} onChange={e=>setNewPw(e.target.value)} placeholder="New password (8+ characters)" autoComplete="new-password"
+                style={{ background:C.bg, border:`1.5px solid ${C.border}`, borderRadius:11, padding:'11px 13px', fontSize:14, color:C.ink }}/>
+              <input type="password" value={confPw} onChange={e=>setConfPw(e.target.value)} placeholder="Confirm new password" autoComplete="new-password"
+                style={{ background:C.bg, border:`1.5px solid ${confPw && newPw !== confPw ? '#FCA5A5' : C.border}`, borderRadius:11, padding:'11px 13px', fontSize:14, color:C.ink }}/>
+              <button onClick={handlePassword} disabled={busy==='password'}
+                style={{ background:C.navy, border:'none', borderRadius:10, padding:'11px', fontSize:13, fontWeight:600, color:'#fff', cursor:'pointer' }}>
+                {busy==='password' ? 'Updating…' : 'Update password'}
+              </button>
+            </div>
+          </Field>
+        </>
+      )}
     </div>
   )
 }

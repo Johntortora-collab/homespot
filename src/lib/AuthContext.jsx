@@ -98,6 +98,38 @@ export function AuthProvider({ children }) {
     return { data, error }
   }
 
+  // Supabase sends a confirmation link to the NEW address. The change only
+  // takes effect once that link is clicked — the old email keeps working
+  // until then, which is the safe behaviour (a typo can't lock you out).
+  async function updateEmail(newEmail) {
+    const { error } = await supabase.auth.updateUser(
+      { email: newEmail },
+      { emailRedirectTo: window.location.origin }
+    )
+    return { error }
+  }
+
+  // Supabase's updateUser doesn't require the current password, which means a
+  // hijacked open session could silently change it. Re-authenticating first
+  // closes that hole.
+  async function updatePassword({ currentPassword, newPassword }) {
+    const email = session?.user?.email
+    if (!email) return { error: { message: 'No email on this account.' } }
+
+    const { error: authErr } = await supabase.auth.signInWithPassword({
+      email,
+      password: currentPassword,
+    })
+    if (authErr) return { error: { message: 'That current password is incorrect.' } }
+
+    const { error } = await supabase.auth.updateUser({ password: newPassword })
+    return { error }
+  }
+
+  // 'google' for OAuth users, 'email' for password accounts. Google users have
+  // no password to change — they manage it with Google.
+  const authProvider = session?.user?.app_metadata?.provider || 'email'
+
   const loading = session === undefined || (session !== null && profile === undefined)
 
   return (
@@ -110,6 +142,9 @@ export function AuthProvider({ children }) {
       signInWithGoogle,
       signOut,
       updateProfile,
+      updateEmail,
+      updatePassword,
+      authProvider,
       refetchProfile: () => fetchProfile(session?.user?.id),
     }}>
       {children}
