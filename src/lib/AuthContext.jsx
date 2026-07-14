@@ -92,27 +92,15 @@ export function AuthProvider({ children }) {
     })
   }
 
-  function signOut() {
-    // Clear the stored session synchronously, before any async call can race
-    // with it. (Until now this cleared nothing at all — the client wasn't
-    // persisting the session anywhere, so there was no token to remove.)
+  async function signOut() {
+    // Plain and standard. supabase.auth.signOut() removes the stored session
+    // itself; the reload then clears all in-memory React state, which a soft
+    // re-render was leaving behind.
     try {
-      localStorage.removeItem('homespot-auth')
-      sessionStorage.clear()
+      await supabase.auth.signOut()
     } catch (err) {
-      console.error('Could not clear stored session:', err)
+      console.error('Sign out error:', err)
     }
-
-    // Fire and forget — never await. On mobile this request can hang, and
-    // everything after it would be stuck behind it.
-    try { supabase.auth.signOut({ scope: 'local' }) } catch (err) { console.error(err) }
-
-    setSession(null)
-    setProfile(null)
-    setProfileLoading(false)
-
-    // Full reload: a soft re-render left stale component state behind, and the
-    // in-memory session would otherwise survive.
     window.location.replace('/')
   }
 
