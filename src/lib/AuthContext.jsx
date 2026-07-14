@@ -92,37 +92,25 @@ export function AuthProvider({ children }) {
     })
   }
 
-  async function signOut() {
-    try {
-      // scope:'local' skips the server round-trip. A network call that hangs
-      // (common on flaky mobile connections) would otherwise block everything
-      // below it and sign-out would appear to do nothing at all.
-      await Promise.race([
-        supabase.auth.signOut({ scope: 'local' }),
-        new Promise(resolve => setTimeout(resolve, 2000)),
-      ])
-    } catch (err) {
-      console.error('Sign out error:', err)
-    }
+  function signOut() {
+    // Clear storage FIRST and synchronously. Anything async here is a race:
+    // a token refresh in flight can rewrite the session key after we've asked
+    // the SDK to remove it, which restores the login on reload — indis-
+    // tinguishable from the button doing nothing.
+    try { localStorage.clear() }   catch (err) { console.error(err) }
+    try { sessionStorage.clear() } catch (err) { console.error(err) }
 
-    // Belt and braces: remove the stored auth token by hand. If the SDK's own
-    // cleanup doesn't complete (seen on iOS), the token survives, the session
-    // is restored on next load, and the user is simply signed back in — which
-    // looks exactly like the button not working.
-    try {
-      Object.keys(localStorage)
-        .filter(k => k.startsWith('sb-') && k.includes('auth-token'))
-        .forEach(k => localStorage.removeItem(k))
-    } catch (err) {
-      console.error('Could not clear stored session:', err)
-    }
+    // Fire and forget. Never await: on mobile this request can hang, and
+    // everything after it would be stuck behind it.
+    try { supabase.auth.signOut({ scope: 'local' }) } catch (err) { console.error(err) }
 
     setSession(null)
     setProfile(null)
     setProfileLoading(false)
 
-    // Hard reset — a soft re-render left stale component state behind.
-    window.location.replace('/')
+    // Full reload with a cache-busting param — a soft re-render left stale
+    // component state behind, and iOS is aggressive about serving old bundles.
+    window.location.replace('/?signedout=' + Date.now())
   }
 
   async function updateProfile(updates) {
