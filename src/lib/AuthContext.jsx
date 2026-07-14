@@ -93,7 +93,25 @@ export function AuthProvider({ children }) {
   }
 
   async function signOut() {
-    await supabase.auth.signOut()
+    try {
+      await supabase.auth.signOut()
+    } catch (err) {
+      // Don't let a network/API failure trap someone in a signed-in UI —
+      // clear locally regardless. Worst case the server session lingers and
+      // expires on its own.
+      console.error('Sign out error:', err)
+    }
+
+    // Clear our own state rather than waiting on onAuthStateChange, which can
+    // be slow or (on iOS PWAs) not fire at all.
+    setSession(null)
+    setProfile(null)
+    setProfileLoading(false)
+
+    // Hard reset. A soft re-render kept stale component state around — the
+    // consumer app held on to whatever screen it was showing, so signing out
+    // appeared to do nothing at all.
+    window.location.href = '/'
   }
 
   async function updateProfile(updates) {
