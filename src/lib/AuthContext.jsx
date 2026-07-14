@@ -94,24 +94,35 @@ export function AuthProvider({ children }) {
 
   async function signOut() {
     try {
-      await supabase.auth.signOut()
+      // scope:'local' skips the server round-trip. A network call that hangs
+      // (common on flaky mobile connections) would otherwise block everything
+      // below it and sign-out would appear to do nothing at all.
+      await Promise.race([
+        supabase.auth.signOut({ scope: 'local' }),
+        new Promise(resolve => setTimeout(resolve, 2000)),
+      ])
     } catch (err) {
-      // Don't let a network/API failure trap someone in a signed-in UI —
-      // clear locally regardless. Worst case the server session lingers and
-      // expires on its own.
       console.error('Sign out error:', err)
     }
 
-    // Clear our own state rather than waiting on onAuthStateChange, which can
-    // be slow or (on iOS PWAs) not fire at all.
+    // Belt and braces: remove the stored auth token by hand. If the SDK's own
+    // cleanup doesn't complete (seen on iOS), the token survives, the session
+    // is restored on next load, and the user is simply signed back in — which
+    // looks exactly like the button not working.
+    try {
+      Object.keys(localStorage)
+        .filter(k => k.startsWith('sb-') && k.includes('auth-token'))
+        .forEach(k => localStorage.removeItem(k))
+    } catch (err) {
+      console.error('Could not clear stored session:', err)
+    }
+
     setSession(null)
     setProfile(null)
     setProfileLoading(false)
 
-    // Hard reset. A soft re-render kept stale component state around — the
-    // consumer app held on to whatever screen it was showing, so signing out
-    // appeared to do nothing at all.
-    window.location.href = '/'
+    // Hard reset — a soft re-render left stale component state behind.
+    window.location.replace('/')
   }
 
   async function updateProfile(updates) {
