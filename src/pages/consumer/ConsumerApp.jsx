@@ -184,7 +184,7 @@ export default function ConsumerApp() {
   }
 
   return (
-    <div className="hs-shell" style={{ minHeight:'100vh', minHeight:'100dvh', background:'#0A0A18', display:'flex', alignItems:'center', justifyContent:'center', fontFamily:'Inter,sans-serif' }}>
+    <div className="hs-shell" style={{ background:'#0A0A18', display:'flex', alignItems:'center', justifyContent:'center', fontFamily:'Inter,sans-serif' }}>
       <style>{`
         @import url('https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,600;0,9..144,700;1,9..144,400&family=Inter:wght@400;500;600&display=swap');
         *{box-sizing:border-box;margin:0;padding:0}
@@ -201,7 +201,7 @@ export default function ConsumerApp() {
         @keyframes bounce{0%{transform:scale(0.5) rotate(-8deg);opacity:0}60%{transform:scale(1.1) rotate(3deg)}100%{transform:scale(1) rotate(0);opacity:1}}
 
         /* Desktop / wide viewports: show as a contained phone frame */
-        .hs-shell { padding:16px; }
+        .hs-shell { padding:16px; min-height:100vh; min-height:100dvh; }
         .hs-phone {
           width:375px; height:780px; max-height:92vh;
           border-radius:44px;
