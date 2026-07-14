@@ -46,6 +46,7 @@ function Router() {
       {legalRoutes}
       <Route path="/admin"           element={<AdminTowns />} />
       <Route path="/scan/:spotId"    element={<OwnerScanRoute />} />
+      <Route path="/owner"           element={<Navigate to="/owner/dashboard" replace />} />
       <Route path="/owner/onboard"   element={<OwnerOnboarding />} />
       <Route path="/owner/dashboard" element={<OwnerDashboard />} />
       <Route path="*"                element={<Navigate to="/owner/dashboard" />} />
@@ -58,6 +59,11 @@ function Router() {
       {legalRoutes}
       <Route path="/admin"        element={<AdminTowns />} />
       <Route path="/scan/:spotId" element={<ConsumerApp />} />
+      {/* A signed-in consumer must still be able to reach business onboarding.
+          Without this, "/owner" fell through to the "/*" catch-all below and
+          dumped them back into the consumer app. */}
+      <Route path="/owner"          element={<OwnerOnboarding />} />
+      <Route path="/owner/onboard"  element={<OwnerOnboarding />} />
       <Route path="/*"            element={<ConsumerApp />} />
     </Routes>
   )
