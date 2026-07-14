@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from 'react'
 import { useParams } from 'react-router-dom'
 import { useAuth } from '../../lib/AuthContext'
-import { useSpots, useStamp, useFeedback, useMyCards, useBlockFeed, useTowns, useTownRequest, useFounderStatus, useMyPerks } from '../../lib/hooks'
+import { useSpots, useStamp, useFeedback, useMyCards, useBlockFeed, useTowns, useTownRequest, useFounderStatus, useMyPerks, useClaimOffer } from '../../lib/hooks'
 import { supabase } from '../../lib/supabase'
 import { getMascot, getUnlockLabel, TOTAL_LAYERS } from '../../lib/mascotEngine'
 import Mascot from '../../components/Mascot'
@@ -240,7 +240,7 @@ export default function ConsumerApp() {
           {screen==='home'       && <Home townId={townId} town={townData} cat={cat} setCat={setCat} onSpot={openSpot} onNav={nav}/>}
           {screen==='spot'       && <SpotDetail spotId={spotId} onBack={goHome} autoStamp={autoStamp} onAutoStampDone={()=>setAutoStamp(false)}/>}
           {screen==='perks'      && <Perks onSpot={openSpot}/>}
-          {screen==='block'      && <Block townId={townId} town={townData}/>}
+          {screen==='block'      && <Block townId={townId} town={townData} onSpot={openSpot}/>}
           {screen==='profile'    && <Profile onSwitch={()=>setScreen('townselect')} onNav={nav}/>}
           {screen==='account'    && <AccountScreen onBack={()=>setScreen('profile')}/>}
         </div>
@@ -631,6 +631,24 @@ function SpotDetail({ spotId, onBack, autoStamp = false, onAutoStampDone = () =>
   const [mood,        setMood]        = useState(null)
   const [note,        setNote]        = useState('')
   const [fbSent,      setFbSent]      = useState(false)
+  const { claimOffer, claiming } = useClaimOffer()
+  const [offerClaimed, setOfferClaimed] = useState(false)
+  const [offerErr,     setOfferErr]     = useState('')
+
+  // Claiming writes a redemption row. The DB has a unique index on
+  // (user_id, offer_id), so a second claim is rejected at the database level —
+  // not just hidden in the UI.
+  async function handleClaimOffer() {
+    if (!spot?.latest_offer_id) return
+    setOfferErr('')
+    const { error } = await claimOffer({
+      offerId: spot.latest_offer_id,
+      spotId:  spot.id,
+      message: spot.latest_offer,
+    })
+    if (error) { setOfferErr(error.message); return }
+    setOfferClaimed(true)
+  }
 
   useEffect(() => {
     if (!spotId) return
@@ -704,9 +722,27 @@ function SpotDetail({ spotId, onBack, autoStamp = false, onAutoStampDone = () =>
 
       <div style={{ padding:'0 16px 100px' }}>
         {spot.latest_offer && (
-          <div style={{ background:'rgba(245,166,35,0.08)', border:`1px solid ${C.amberBrd}`, borderRadius:11, padding:'10px 13px', display:'flex', gap:9, marginBottom:13, marginTop:6 }}>
-            <span>🔥</span>
-            <span style={{ fontFamily:'Inter,sans-serif', fontSize:12, color:C.amber }}>{spot.latest_offer}</span>
+          <div style={{ background:'rgba(245,166,35,0.08)', border:`1px solid ${C.amberBrd}`, borderRadius:11, padding:'12px 13px', marginBottom:13, marginTop:6 }}>
+            <div style={{ display:'flex', gap:9, marginBottom: offerClaimed || spot.latest_offer_id ? 10 : 0 }}>
+              <span>🔥</span>
+              <span style={{ fontFamily:'Inter,sans-serif', fontSize:12.5, color:C.amber, flex:1, lineHeight:1.45 }}>{spot.latest_offer}</span>
+            </div>
+
+            {offerClaimed ? (
+              <div style={{ display:'flex', alignItems:'center', gap:7, fontSize:12, color:C.sage, fontWeight:500 }}>
+                <span>✓</span> Claimed — find it under Perks
+              </div>
+            ) : offerErr ? (
+              <div style={{ fontSize:12, color:'#E8956D' }}>{offerErr}</div>
+            ) : spot.latest_offer_id ? (
+              <button
+                onClick={handleClaimOffer}
+                disabled={claiming}
+                style={{ width:'100%', background:C.amber, border:'none', borderRadius:9, padding:'9px', fontSize:12.5, fontWeight:700, color:C.bg, cursor:'pointer' }}
+              >
+                {claiming ? 'Claiming…' : 'Grab this deal →'}
+              </button>
+            ) : null}
           </div>
         )}
 
@@ -1098,7 +1134,7 @@ function AccountScreen({ onBack }) {
 }
 
 // ── BLOCK ─────────────────────────────────────────────────────────────────────
-function Block({ townId, town }) {
+function Block({ townId, town, onSpot }) {
   const { feed, loading } = useBlockFeed(townId)
   const tc = { visit:C.amber, offer:'#E8956D', new:'#7BA05B' }
   const tl = { visit:'STAMP EARNED', offer:'DEAL ALERT', new:'NEW SPOT' }
@@ -1119,13 +1155,14 @@ function Block({ townId, town }) {
             <div style={{ fontSize:13, color:'#555' }}>Activity from local spots will appear here as people visit and businesses send offers.</div>
           </div>
         ) : feed.map((item,i)=>(
-          <div key={item.id} style={{ background:C.card, border:`1px solid ${C.border}`, borderRadius:14, padding:'12px 14px', marginBottom:9, display:'flex', gap:11, alignItems:'flex-start', animation:'up 0.3s ease', animationDelay:`${i*0.06}s`, animationFillMode:'both' }}>
+          <div key={item.id} onClick={()=>item.spot_id && onSpot(item.spot_id)} style={{ background:C.card, border:`1px solid ${C.border}`, borderRadius:14, padding:'12px 14px', marginBottom:9, display:'flex', gap:11, alignItems:'flex-start', animation:'up 0.3s ease', animationDelay:`${i*0.06}s`, animationFillMode:'both', cursor:item.spot_id?'pointer':'default' }}>
             <div style={{ width:40, height:40, background:`${tc[item.type]||C.amber}18`, border:`1px solid ${tc[item.type]||C.amber}44`, borderRadius:11, display:'flex', alignItems:'center', justifyContent:'center', fontSize:18, flexShrink:0 }}>{item.emoji}</div>
             <div style={{ flex:1 }}>
               <div style={{ fontSize:9, fontWeight:700, color:tc[item.type]||C.amber, letterSpacing:'0.1em', marginBottom:2 }}>{tl[item.type]||'UPDATE'}</div>
               <div style={{ fontFamily:'Fraunces,serif', fontSize:13, color:'#fff', marginBottom:1 }}>{item.name}</div>
               <div style={{ fontSize:11, color:'#666' }}>{item.text}</div>
             </div>
+            {item.spot_id && <span style={{ color:'#444', fontSize:14, alignSelf:'center' }}>›</span>}
           </div>
         ))}
       </div>

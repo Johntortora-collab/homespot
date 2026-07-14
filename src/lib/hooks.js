@@ -476,13 +476,13 @@ export function useBlockFeed(townId) {
       const [{ data: visits }, { data: offers }] = await Promise.all([
         supabase
           .from('visits')
-          .select('*, profiles(full_name, avatar), spots(name, emoji, town_id)')
+          .select('*, profiles(full_name, avatar), spots(id, name, emoji, town_id)')
           .eq('spots.town_id', townId)
           .order('created_at', { ascending: false })
           .limit(15),
         supabase
           .from('offers')
-          .select('*, spots(name, emoji, town_id)')
+          .select('*, spots(id, name, emoji, town_id)')
           .eq('spots.town_id', townId)
           .eq('active', true)
           .or(`expires_at.is.null,expires_at.gt.${new Date().toISOString()}`)
@@ -493,7 +493,8 @@ export function useBlockFeed(townId) {
       const visitItems = (visits || [])
         .filter(v => v.spots)
         .map(v => ({
-          id:     v.id,
+          id:      v.id,
+          spot_id: v.spots.id,
           type:   'visit',
           emoji:  v.spots.emoji,
           name:   v.spots.name,
@@ -504,7 +505,8 @@ export function useBlockFeed(townId) {
       const offerItems = (offers || [])
         .filter(o => o.spots)
         .map(o => ({
-          id:     o.id,
+          id:      o.id,
+          spot_id: o.spots.id,
           type:   'offer',
           emoji:  o.spots.emoji,
           name:   o.spots.name,
