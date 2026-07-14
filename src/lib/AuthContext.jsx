@@ -5,26 +5,33 @@ const AuthContext = createContext(null)
 
 export function AuthProvider({ children }) {
   const [session, setSession]   = useState(undefined) // undefined = loading
-  const [profile, setProfile]   = useState(undefined) // undefined = still fetching
+  const [profile, setProfile]   = useState(null)
+  const [profileLoading, setProfileLoading] = useState(true)
 
   useEffect(() => {
     // Grab initial session
     supabase.auth.getSession().then(({ data }) => {
       setSession(data.session)
       if (data.session) fetchProfile(data.session.user.id)
+      else setProfileLoading(false)
     })
 
     // Listen for auth changes
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
       setSession(session)
-      if (session) fetchProfile(session.user.id)
-      else setProfile(null)
+      if (session) {
+        fetchProfile(session.user.id)
+      } else {
+        setProfile(null)
+        setProfileLoading(false)
+      }
     })
 
     return () => subscription.unsubscribe()
   }, [])
 
   async function fetchProfile(userId) {
+    setProfileLoading(true)
     // If we just landed back from a Google OAuth redirect with a pending
     // role (set by signInWithGoogle), apply it now — Google sign-in creates
     // a fresh profile with the schema's default role ('consumer'), so an
@@ -41,17 +48,19 @@ export function AuthProvider({ children }) {
     }
 
     try {
-      const { data } = await supabase
+      const { data, error } = await supabase
         .from('profiles')
         .select('*, towns(*)')
         .eq('id', userId)
         .single()
+      if (error) console.error('Profile fetch error:', error)
       setProfile(data ?? null)
     } catch (err) {
-      // Must still resolve to null, not stay undefined — otherwise `loading`
-      // never flips false and the app hangs on the splash forever.
       console.error('Profile fetch failed:', err)
       setProfile(null)
+    } finally {
+      // Always clear, even on failure — otherwise the app hangs on the splash.
+      setProfileLoading(false)
     }
   }
 
@@ -130,7 +139,7 @@ export function AuthProvider({ children }) {
   // no password to change — they manage it with Google.
   const authProvider = session?.user?.app_metadata?.provider || 'email'
 
-  const loading = session === undefined || (session !== null && profile === undefined)
+  const loading = session === undefined || (session !== null && profileLoading)
 
   return (
     <AuthContext.Provider value={{
