@@ -5,7 +5,7 @@ const AuthContext = createContext(null)
 
 export function AuthProvider({ children }) {
   const [session, setSession]   = useState(undefined) // undefined = loading
-  const [profile, setProfile]   = useState(null)
+  const [profile, setProfile]   = useState(undefined) // undefined = still fetching
 
   useEffect(() => {
     // Grab initial session
@@ -40,12 +40,19 @@ export function AuthProvider({ children }) {
       window.history.replaceState({}, '', cleanUrl)
     }
 
-    const { data } = await supabase
-      .from('profiles')
-      .select('*, towns(*)')
-      .eq('id', userId)
-      .single()
-    setProfile(data)
+    try {
+      const { data } = await supabase
+        .from('profiles')
+        .select('*, towns(*)')
+        .eq('id', userId)
+        .single()
+      setProfile(data ?? null)
+    } catch (err) {
+      // Must still resolve to null, not stay undefined — otherwise `loading`
+      // never flips false and the app hangs on the splash forever.
+      console.error('Profile fetch failed:', err)
+      setProfile(null)
+    }
   }
 
   async function signUp({ email, password, fullName, role = 'consumer' }) {
@@ -91,7 +98,7 @@ export function AuthProvider({ children }) {
     return { data, error }
   }
 
-  const loading = session === undefined
+  const loading = session === undefined || (session !== null && profile === undefined)
 
   return (
     <AuthContext.Provider value={{

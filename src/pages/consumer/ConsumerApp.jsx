@@ -39,11 +39,11 @@ function Label({ children }) {
 
 // ── Root ──────────────────────────────────────────────────────────────────────
 export default function ConsumerApp() {
-  const { profile, signOut, session, updateProfile, signUp, signIn } = useAuth()
+  const { profile, signOut, session, updateProfile, signUp, signIn, loading: authLoading } = useAuth()
   const { spotId: urlSpotId } = useParams() // present when loaded via /scan/:spotId deep link
-  const [screen,      setScreen]      = useState(profile?.town_id ? 'home' : 'townselect')
-  const [townId,      setTownId]      = useState(profile?.town_id || null)
-  const [townData,    setTownData]    = useState(profile?.towns   || null)
+  const [screen,      setScreen]      = useState(null)   // null = still deciding; set once profile resolves
+  const [townId,      setTownId]      = useState(null)
+  const [townData,    setTownData]    = useState(null)
   const [spotId,      setSpotId]      = useState(null)
   const [tab,         setTab]         = useState('home')
   const [cat,         setCat]         = useState('All')
@@ -53,6 +53,26 @@ export default function ConsumerApp() {
   const [scanFlash,   setScanFlash]   = useState(null) // 'not-found' | null
   const [requestTownAfterAuth, setRequestTownAfterAuth] = useState(false)
   const [autoStamp, setAutoStamp] = useState(false)
+
+  // Decide the landing screen ONCE the profile has actually loaded.
+  // This can't be done via useState's initial value: profile is null on the
+  // first render (auth is still resolving), so the initial value would always
+  // evaluate to 'townselect' and returning users would be sent back to the
+  // town picker every single time despite having a town saved.
+  useEffect(() => {
+    if (authLoading || screen !== null) return
+
+    if (!session) {
+      setScreen('townselect')          // brand new visitor
+    } else if (profile?.town_id) {
+      setTownId(profile.town_id)       // returning user — restore their town
+      setTownData(profile.towns || null)
+      setScreen('home')
+    } else {
+      setScreen('townselect')          // signed in but never picked a town
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [authLoading, session, profile, screen])
 
   // User picks a town → save it, then go to signup if not logged in
   function selectTown(town) {
@@ -130,6 +150,23 @@ export default function ConsumerApp() {
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [urlSpotId, session, townId])
+
+  // Still working out where this person belongs — show the mark, not a flash of
+  // the town picker followed by a jump to home.
+  if (screen === null) {
+    return (
+      <div style={{ height:'100vh', background:C.bg, display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center', gap:14 }}>
+        <div style={{ animation:'pulse 1.4s ease-in-out infinite' }}>
+          <svg width={40} height={40} viewBox="0 0 32 32">
+            <circle cx="16" cy="16" r="16" fill={C.amber}/>
+            <path d="M16 7L24 14V25H19V19H13V25H8V14Z" fill={C.bg}/>
+          </svg>
+        </div>
+        <div style={{ fontFamily:'Fraunces,serif', fontSize:14, color:'#555' }}>Loading your town…</div>
+        <style>{`@keyframes pulse{0%,100%{opacity:1;transform:scale(1)}50%{opacity:0.55;transform:scale(0.94)}}`}</style>
+      </div>
+    )
+  }
 
   const noChrome = ['townselect','signup','requesttown'].includes(screen)
 
