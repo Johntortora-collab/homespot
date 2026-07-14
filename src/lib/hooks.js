@@ -361,11 +361,16 @@ export function useSendOffer(spotId) {
   const [sending, setSending] = useState(false)
   const [sent,    setSent]    = useState(false)
 
-  async function sendOffer({ message, target }) {
+  // durationHours: a number, or null for "runs until I end it"
+  async function sendOffer({ message, target, durationHours = null }) {
     setSending(true)
+    const expires_at = durationHours
+      ? new Date(Date.now() + durationHours * 3600 * 1000).toISOString()
+      : null
+
     const { error } = await supabase
       .from('offers')
-      .insert({ spot_id: spotId, message, target })
+      .insert({ spot_id: spotId, message, target, expires_at, active: true })
     setSending(false)
     if (!error) {
       setSent(true)
@@ -375,6 +380,44 @@ export function useSendOffer(spotId) {
   }
 
   return { sendOffer, sending, sent }
+}
+
+// ── Owner: currently-running offers (and ending them early) ───────────────────
+export function useLiveOffers(spotId) {
+  const [offers,  setOffers]  = useState([])
+  const [loading, setLoading] = useState(true)
+
+  const fetchOffers = useCallback(async () => {
+    if (!spotId) return
+    setLoading(true)
+    const { data } = await supabase
+      .from('offers')
+      .select('*')
+      .eq('spot_id', spotId)
+      .eq('active', true)
+      .order('sent_at', { ascending: false })
+
+    // Filter out ones that have already timed out. They're still `active` in the
+    // DB (nothing sweeps them), but they're no longer live to customers — so the
+    // owner shouldn't see them listed as running either.
+    const now = Date.now()
+    const live = (data || []).filter(o => !o.expires_at || new Date(o.expires_at).getTime() > now)
+    setOffers(live)
+    setLoading(false)
+  }, [spotId])
+
+  useEffect(() => { fetchOffers() }, [fetchOffers])
+
+  async function endOffer(offerId) {
+    const { error } = await supabase
+      .from('offers')
+      .update({ active: false })
+      .eq('id', offerId)
+    if (!error) await fetchOffers()
+    return { error }
+  }
+
+  return { offers, loading, endOffer, refetch: fetchOffers }
 }
 
 // ── Owner: feedback ───────────────────────────────────────────────────────────
@@ -421,6 +464,8 @@ export function useBlockFeed(townId) {
           .from('offers')
           .select('*, spots(name, emoji, town_id)')
           .eq('spots.town_id', townId)
+          .eq('active', true)
+          .or(`expires_at.is.null,expires_at.gt.${new Date().toISOString()}`)
           .order('sent_at', { ascending: false })
           .limit(10),
       ])

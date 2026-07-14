@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect } from 'react'
 import { useAuth } from '../../lib/AuthContext'
-import { useMySpot, useDashboardStats, useRealtimeVisits, useSendOffer, useOwnerFeedback, useManageSpot } from '../../lib/hooks'
+import { useMySpot, useDashboardStats, useRealtimeVisits, useSendOffer, useOwnerFeedback, useManageSpot, useLiveOffers } from '../../lib/hooks'
 import { supabase } from '../../lib/supabase'
 
 const C = {
@@ -346,9 +346,36 @@ function Customers({ spot }) {
 
 // ── SEND OFFER ────────────────────────────────────────────────────────────────
 function SendOfferPage({ spot }) {
-  const [message, setMessage] = useState('')
-  const [target,  setTarget]  = useState('all')
+  const [message,  setMessage]  = useState('')
+  const [target,   setTarget]   = useState('all')
+  const [duration, setDuration] = useState(24)   // hours; null = until ended manually
   const { sendOffer, sending, sent } = useSendOffer(spot.id)
+  const { offers: liveOffers, endOffer, refetch: refetchOffers } = useLiveOffers(spot.id)
+  const [endingId, setEndingId] = useState(null)
+
+  const durations = [
+    { id:6,    label:'6 hours',  desc:'Flash promo' },
+    { id:24,   label:'Today',    desc:'Ends in 24 hours' },
+    { id:72,   label:'3 days',   desc:'Short run' },
+    { id:168,  label:'1 week',   desc:'Longer campaign' },
+    { id:null, label:'No end date', desc:'Runs until you end it' },
+  ]
+
+  async function handleEnd(id) {
+    setEndingId(id)
+    await endOffer(id)
+    setEndingId(null)
+  }
+
+  function timeLeft(expiresAt) {
+    if (!expiresAt) return 'No end date'
+    const ms = new Date(expiresAt) - Date.now()
+    if (ms <= 0) return 'Expired'
+    const h = Math.floor(ms / 3600000)
+    if (h < 1) return `${Math.max(1, Math.floor(ms / 60000))}m left`
+    if (h < 24) return `${h}h left`
+    return `${Math.floor(h / 24)}d ${h % 24}h left`
+  }
 
   const targets = [
     {id:'all',     label:'All customers',  count:'Everyone', desc:'All followers'},
@@ -380,6 +407,35 @@ function SendOfferPage({ spot }) {
     <div style={{ animation:'up 0.3s ease' }}>
       <PageHeader eyebrow="Reach your customers" title="Send an Offer" sub="Customers get a push notification instantly"/>
 
+      {/* Currently running */}
+      {liveOffers.length > 0 && (
+        <div style={{ marginBottom:24 }}>
+          <div style={{ fontSize:11, fontWeight:700, color:C.sage, letterSpacing:'0.08em', textTransform:'uppercase', marginBottom:10 }}>
+            {liveOffers.length} offer{liveOffers.length===1?'':'s'} running now
+          </div>
+          <div style={{ display:'flex', flexDirection:'column', gap:8 }}>
+            {liveOffers.map(o=>(
+              <div key={o.id} style={{ background:C.card, border:`1px solid ${C.sage}55`, borderRadius:13, padding:'13px 15px', display:'flex', alignItems:'center', gap:12, flexWrap:'wrap' }}>
+                <span style={{ width:8, height:8, borderRadius:'50%', background:C.sage, flexShrink:0 }}/>
+                <div style={{ flex:1, minWidth:180 }}>
+                  <div style={{ fontSize:13.5, color:C.ink, fontWeight:500 }}>{o.message}</div>
+                  <div style={{ fontSize:11.5, color:C.muted, marginTop:2 }}>
+                    {timeLeft(o.expires_at)} · sent {new Date(o.sent_at).toLocaleDateString()}
+                  </div>
+                </div>
+                <button
+                  onClick={()=>handleEnd(o.id)}
+                  disabled={endingId===o.id}
+                  style={{ background:'none', border:`1px solid ${C.border}`, borderRadius:9, padding:'7px 14px', fontSize:12.5, fontWeight:600, color:C.rose, cursor:'pointer', flexShrink:0 }}
+                >
+                  {endingId===o.id ? 'Ending…' : 'End now'}
+                </button>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
       <div className="ow-offer-grid">
         <div style={{ display:'flex', flexDirection:'column', gap:14 }}>
           {/* Target */}
@@ -407,7 +463,32 @@ function SendOfferPage({ spot }) {
             ))}
           </div>
 
-          <button onClick={()=>message.trim()&&sendOffer({message,target})} disabled={!message.trim()||sending} style={{ background:message.trim()&&!sending?C.amber:'#E8E3DC', border:'none', borderRadius:12, padding:'14px', fontSize:14, fontWeight:600, color:message.trim()&&!sending?C.navy:C.muted, cursor:message.trim()&&!sending?'pointer':'default', transition:'all 0.2s', boxShadow:message.trim()?'0 6px 18px rgba(245,166,35,0.3)':'none' }}>
+          {/* How long it runs */}
+          <div style={{ background:C.card, border:`1px solid ${C.border}`, borderRadius:15, padding:'18px' }}>
+            <div style={{ fontFamily:'Fraunces,serif', fontSize:14, fontWeight:700, color:C.ink, marginBottom:4 }}>How long should it run?</div>
+            <div style={{ fontSize:11.5, color:C.muted, marginBottom:12 }}>It disappears from customers' apps automatically when it ends.</div>
+            <div style={{ display:'flex', flexWrap:'wrap', gap:7 }}>
+              {durations.map(d=>(
+                <button
+                  key={String(d.id)}
+                  onClick={()=>setDuration(d.id)}
+                  title={d.desc}
+                  style={{
+                    background: duration===d.id ? C.amberSoft : C.bg,
+                    border: `2px solid ${duration===d.id ? C.amber : C.border}`,
+                    borderRadius:10, padding:'9px 13px', fontSize:12.5,
+                    fontWeight: duration===d.id ? 600 : 400,
+                    color: duration===d.id ? '#8A6A00' : C.mid,
+                    cursor:'pointer', transition:'all 0.15s',
+                  }}
+                >
+                  {d.label}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          <button onClick={()=>message.trim()&&sendOffer({message,target,durationHours:duration}).then(refetchOffers)} disabled={!message.trim()||sending} style={{ background:message.trim()&&!sending?C.amber:'#E8E3DC', border:'none', borderRadius:12, padding:'14px', fontSize:14, fontWeight:600, color:message.trim()&&!sending?C.navy:C.muted, cursor:message.trim()&&!sending?'pointer':'default', transition:'all 0.2s', boxShadow:message.trim()?'0 6px 18px rgba(245,166,35,0.3)':'none' }}>
             {sending?'Sending…':'✦ Send offer'}
           </button>
         </div>
