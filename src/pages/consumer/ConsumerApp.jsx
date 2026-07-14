@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from 'react'
 import { useParams } from 'react-router-dom'
 import { useAuth } from '../../lib/AuthContext'
-import { useSpots, useStamp, useFeedback, useMyCards, useBlockFeed, useTowns, useTownRequest, useFounderStatus } from '../../lib/hooks'
+import { useSpots, useStamp, useFeedback, useMyCards, useBlockFeed, useTowns, useTownRequest, useFounderStatus, useMyPerks } from '../../lib/hooks'
 import { supabase } from '../../lib/supabase'
 import { getMascot, getUnlockLabel, TOTAL_LAYERS } from '../../lib/mascotEngine'
 import Mascot from '../../components/Mascot'
@@ -798,8 +798,19 @@ function UnlockReveal({ mascot, newStamps, perkEarned, spotPerk, customerName, s
 // ── PERKS ─────────────────────────────────────────────────────────────────────
 function Perks({ onSpot }) {
   const { cards, loading } = useMyCards()
-  const earned = cards.filter(c => c.stamps === 0 && c.lifetime > 0)
-  const prog   = cards.filter(c => !(c.stamps === 0 && c.lifetime > 0))
+  const { pending, redeemed, loading: perksLoading, redeem } = useMyPerks()
+  const [confirming, setConfirming] = useState(null)  // perk pending confirmation
+  const [showing,    setShowing]    = useState(null)  // perk being shown to staff
+  const [err,        setErr]        = useState('')
+
+  async function doRedeem(perk) {
+    const { error } = await redeem(perk.id)
+    setConfirming(null)
+    if (error) { setErr(error.message); setTimeout(()=>setErr(''), 3000); return }
+    setShowing(perk)
+  }
+
+  const busy = loading || perksLoading
 
   return (
     <div style={{ height:'100%', overflowY:'auto', background:C.bg }}>
@@ -807,52 +818,137 @@ function Perks({ onSpot }) {
         <TownPill>Your Progress</TownPill>
         <h2 style={{ fontFamily:'Fraunces,serif', fontSize:24, color:'#fff', marginTop:6 }}>Local <span style={{ color:C.amber, fontStyle:'italic' }}>Perks</span></h2>
       </div>
+
       <div style={{ display:'flex', gap:8, padding:'12px 16px' }}>
-        {[[cards.reduce((s,c)=>s+(c.lifetime||0),0),'Visits'],[cards.reduce((s,c)=>s+(c.stamps||0),0),'Stamps'],[earned.length,'Ready']].map(([v,l])=>(
-          <div key={l} style={{ flex:1, background:C.card, border:`1px solid ${C.border}`, borderRadius:12, padding:'12px 8px', textAlign:'center' }}>
+        {[
+          [cards.reduce((s,c)=>s+(c.lifetime||0),0), 'Visits'],
+          [cards.reduce((s,c)=>s+(c.stamps||0),0),   'Stamps'],
+          [pending.length,                            'Ready'],
+        ].map(([v,l])=>(
+          <div key={l} style={{ flex:1, background:C.card, border:`1px solid ${l==='Ready'&&pending.length>0 ? C.amber : C.border}`, borderRadius:12, padding:'12px 8px', textAlign:'center' }}>
             <div style={{ fontFamily:'Fraunces,serif', fontSize:20, color:C.amber, fontWeight:700 }}>{v}</div>
             <div style={{ fontSize:10, color:'#666' }}>{l}</div>
           </div>
         ))}
       </div>
 
-      {loading ? <div style={{ textAlign:'center', padding:'40px', color:C.dim }}>Loading…</div> : cards.length === 0 ? (
-        <div style={{ textAlign:'center', padding:'48px 24px' }}>
-          <div style={{ fontSize:36, marginBottom:12 }}>✦</div>
-          <div style={{ fontFamily:'Fraunces,serif', fontSize:18, color:'#fff', marginBottom:6 }}>No stamps yet</div>
-          <div style={{ fontSize:13, color:'#555' }}>Visit a local spot and tap Scan Spot QR at the register to start earning.</div>
+      {err && (
+        <div style={{ margin:'0 16px 10px', background:'rgba(232,149,109,0.12)', border:'1px solid rgba(232,149,109,0.4)', borderRadius:10, padding:'10px 13px', fontSize:12.5, color:'#E8956D' }}>
+          {err}
         </div>
-      ) : <>
-        {earned.length > 0 && <>
-          <div style={{ padding:'14px 16px 8px' }}><Label>🎁 Ready to redeem</Label></div>
-          {earned.map(c=>(
-            <div key={c.id} onClick={()=>onSpot(c.spot_id)} style={{ background:C.card, border:'1px solid rgba(245,166,35,0.3)', borderRadius:14, padding:'12px 14px', margin:'0 16px 9px', display:'flex', alignItems:'center', gap:12, cursor:'pointer' }}>
-              <span style={{ fontSize:24 }}>{c.spots?.emoji}</span>
-              <div style={{ flex:1 }}>
-                <div style={{ fontFamily:'Fraunces,serif', fontSize:13, color:'#fff' }}>{c.spots?.name}</div>
-                <div style={{ fontSize:11, color:C.amber }}>🎁 {c.spots?.perk}</div>
-              </div>
-              <div style={{ background:C.amber, color:C.bg, fontSize:11, fontWeight:700, padding:'5px 11px', borderRadius:20 }}>Redeem</div>
-            </div>
-          ))}
-        </>}
-        {prog.length > 0 && <>
-          <div style={{ padding:'14px 16px 8px' }}><Label>In progress</Label></div>
-          {prog.map(c=>(
-            <div key={c.id} onClick={()=>onSpot(c.spot_id)} style={{ background:C.card, border:`1px solid ${C.border}`, borderRadius:14, padding:'12px 14px', margin:'0 16px 9px', display:'flex', alignItems:'center', gap:12, cursor:'pointer' }}>
-              <span style={{ fontSize:24 }}>{c.spots?.emoji}</span>
-              <div style={{ flex:1 }}>
-                <div style={{ fontFamily:'Fraunces,serif', fontSize:13, color:'#fff' }}>{c.spots?.name}</div>
-                <div style={{ background:C.card2, borderRadius:20, height:4, overflow:'hidden', marginTop:6 }}>
-                  <div style={{ width:`${((c.stamps||0)/(c.spots?.stamps_required||8))*100}%`, height:'100%', background:`linear-gradient(90deg,${c.spots?.color||C.amber},${C.amber})`, borderRadius:20 }}/>
+      )}
+
+      {busy ? <div style={{ textAlign:'center', padding:'40px', color:C.dim }}>Loading…</div> : (
+        <>
+          {/* Earned, not yet collected */}
+          {pending.length > 0 && (
+            <>
+              <div style={{ padding:'14px 16px 8px' }}><Label>🎁 Ready to claim</Label></div>
+              {pending.map(p=>(
+                <div key={p.id} style={{ background:'linear-gradient(135deg,rgba(245,166,35,0.13),rgba(232,149,109,0.06))', border:'1px solid rgba(245,166,35,0.45)', borderRadius:14, padding:'13px 14px', margin:'0 16px 9px', display:'flex', alignItems:'center', gap:12 }}>
+                  <span style={{ fontSize:26 }}>{p.spots?.emoji}</span>
+                  <div style={{ flex:1, minWidth:0 }}>
+                    <div style={{ fontFamily:'Fraunces,serif', fontSize:13.5, color:'#fff' }}>{p.spots?.name}</div>
+                    <div style={{ fontSize:12, color:C.amber, fontWeight:500 }}>🎁 {p.reward_text}</div>
+                    <div style={{ fontSize:10.5, color:'#666', marginTop:2 }}>
+                      Earned {new Date(p.earned_at).toLocaleDateString()}
+                    </div>
+                  </div>
+                  <button onClick={()=>setConfirming(p)} style={{ background:C.amber, color:C.bg, fontSize:11.5, fontWeight:700, padding:'7px 13px', borderRadius:20, border:'none', cursor:'pointer', flexShrink:0 }}>
+                    Redeem
+                  </button>
                 </div>
-              </div>
-              <span style={{ fontSize:11, color:'#444' }}>{c.stamps||0}/{c.spots?.stamps_required||8}</span>
+              ))}
+            </>
+          )}
+
+          {/* Cards still filling up */}
+          {cards.length > 0 && (
+            <>
+              <div style={{ padding:'14px 16px 8px' }}><Label>In progress</Label></div>
+              {cards.map(c=>(
+                <div key={c.id} onClick={()=>onSpot(c.spot_id)} style={{ background:C.card, border:`1px solid ${C.border}`, borderRadius:14, padding:'12px 14px', margin:'0 16px 9px', display:'flex', alignItems:'center', gap:12, cursor:'pointer' }}>
+                  <span style={{ fontSize:24 }}>{c.spots?.emoji}</span>
+                  <div style={{ flex:1 }}>
+                    <div style={{ fontFamily:'Fraunces,serif', fontSize:13, color:'#fff' }}>{c.spots?.name}</div>
+                    <div style={{ background:C.card2, borderRadius:20, height:4, overflow:'hidden', marginTop:6 }}>
+                      <div style={{ width:`${((c.stamps||0)/(c.spots?.stamps_required||8))*100}%`, height:'100%', background:`linear-gradient(90deg,${c.spots?.color||C.amber},${C.amber})`, borderRadius:20 }}/>
+                    </div>
+                  </div>
+                  <span style={{ fontSize:11, color:'#444' }}>{c.stamps||0}/{c.spots?.stamps_required||8}</span>
+                </div>
+              ))}
+            </>
+          )}
+
+          {/* Already collected */}
+          {redeemed.length > 0 && (
+            <>
+              <div style={{ padding:'14px 16px 8px' }}><Label>Collected</Label></div>
+              {redeemed.slice(0,10).map(p=>(
+                <div key={p.id} style={{ background:C.card, border:`1px solid ${C.border}`, borderRadius:14, padding:'11px 14px', margin:'0 16px 9px', display:'flex', alignItems:'center', gap:12, opacity:0.55 }}>
+                  <span style={{ fontSize:20 }}>{p.spots?.emoji}</span>
+                  <div style={{ flex:1, minWidth:0 }}>
+                    <div style={{ fontSize:12.5, color:'#aaa' }}>{p.reward_text}</div>
+                    <div style={{ fontSize:10.5, color:'#555' }}>{p.spots?.name} · {new Date(p.redeemed_at).toLocaleDateString()}</div>
+                  </div>
+                  <span style={{ fontSize:13, color:C.sage }}>✓</span>
+                </div>
+              ))}
+            </>
+          )}
+
+          {cards.length === 0 && pending.length === 0 && (
+            <div style={{ textAlign:'center', padding:'48px 24px' }}>
+              <div style={{ fontSize:36, marginBottom:12 }}>✦</div>
+              <div style={{ fontFamily:'Fraunces,serif', fontSize:18, color:'#fff', marginBottom:6 }}>No stamps yet</div>
+              <div style={{ fontSize:13, color:'#555' }}>Tap the sticker at a local spot's counter to start earning.</div>
             </div>
-          ))}
-        </>}
-      </>}
+          )}
+        </>
+      )}
+
       <div style={{ height:100 }}/>
+
+      {/* Confirm — guards against burning a perk from the couch */}
+      {confirming && (
+        <div style={{ position:'absolute', inset:0, background:'rgba(0,0,0,0.75)', display:'flex', alignItems:'center', justifyContent:'center', padding:'0 26px', zIndex:60 }}>
+          <div style={{ background:C.card, border:`1px solid ${C.border}`, borderRadius:18, padding:'24px 22px', textAlign:'center', maxWidth:320, animation:'up 0.25s ease' }}>
+            <div style={{ fontSize:32, marginBottom:10 }}>✋</div>
+            <div style={{ fontFamily:'Fraunces,serif', fontSize:17, color:'#fff', fontWeight:700, marginBottom:7 }}>Are you at the counter?</div>
+            <div style={{ fontSize:13, color:'#888', lineHeight:1.6, marginBottom:18 }}>
+              Only redeem <strong style={{ color:C.amber }}>{confirming.reward_text}</strong> when staff can see your screen. This uses it up and can't be undone.
+            </div>
+            <div style={{ display:'flex', gap:9 }}>
+              <button onClick={()=>setConfirming(null)} style={{ flex:1, background:'none', border:`1px solid ${C.border}`, borderRadius:11, padding:'11px', fontSize:13, color:'#aaa', cursor:'pointer' }}>
+                Not yet
+              </button>
+              <button onClick={()=>doRedeem(confirming)} style={{ flex:1, background:C.amber, border:'none', borderRadius:11, padding:'11px', fontSize:13, fontWeight:600, color:C.bg, cursor:'pointer' }}>
+                Redeem it
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Show to staff */}
+      {showing && (
+        <div style={{ position:'absolute', inset:0, background:'linear-gradient(160deg,#2A1F42,#13131F)', display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center', padding:'0 26px', zIndex:60, textAlign:'center' }}>
+          <div style={{ fontSize:46, marginBottom:14, animation:'pop 0.5s ease' }}>🎁</div>
+          <div style={{ fontSize:12, color:C.amber, fontWeight:700, letterSpacing:'0.1em', textTransform:'uppercase', marginBottom:8 }}>Show this to staff</div>
+          <div style={{ fontFamily:'Fraunces,serif', fontSize:24, color:'#fff', fontWeight:700, marginBottom:5 }}>{showing.reward_text}</div>
+          <div style={{ fontSize:13, color:'#888', marginBottom:26 }}>at {showing.spots?.name}</div>
+
+          <div style={{ background:'rgba(245,166,35,0.12)', border:`2px solid ${C.amber}`, borderRadius:16, padding:'16px 32px', marginBottom:28 }}>
+            <div style={{ fontSize:10, color:C.amber, letterSpacing:'0.14em', marginBottom:4 }}>CODE</div>
+            <div style={{ fontFamily:'monospace', fontSize:34, color:'#fff', fontWeight:700, letterSpacing:'0.14em' }}>{showing.code}</div>
+          </div>
+
+          <button onClick={()=>setShowing(null)} style={{ background:'rgba(255,255,255,0.1)', border:'none', borderRadius:12, padding:'12px 30px', fontSize:14, color:'#fff', cursor:'pointer' }}>
+            Done
+          </button>
+        </div>
+      )}
     </div>
   )
 }

@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect } from 'react'
 import { useAuth } from '../../lib/AuthContext'
-import { useMySpot, useDashboardStats, useRealtimeVisits, useSendOffer, useOwnerFeedback, useManageSpot, useLiveOffers } from '../../lib/hooks'
+import { useMySpot, useDashboardStats, useRealtimeVisits, useSendOffer, useOwnerFeedback, useManageSpot, useLiveOffers, useSpotRedemptions } from '../../lib/hooks'
 import { supabase } from '../../lib/supabase'
 
 const C = {
@@ -52,6 +52,7 @@ export default function OwnerDashboard() {
     { id:'overview',  label:'Overview',   icon:'◈' },
     { id:'customers', label:'Customers',  icon:'◎' },
     { id:'offer',     label:'Send Offer', icon:'✦' },
+    { id:'perks',     label:'Perk Claims', icon:'🎁' },
     { id:'feedback',  label:'Feedback',   icon:'◻' },
     { id:'qr',        label:'Tap Tag',    icon:'📲' },
   ] : [
@@ -149,6 +150,7 @@ export default function OwnerDashboard() {
         {page==='overview'  && spot && <Overview  spot={spot}/>}
         {page==='customers' && spot && <Customers spot={spot}/>}
         {page==='offer'     && spot && <SendOfferPage spot={spot}/>}
+        {page==='perks'     && spot && <PerkClaimsPage spot={spot}/>}
         {page==='feedback'  && spot && <FeedbackPage spot={spot}/>}
         {page==='qr'        && spot && <QRPage spot={spot}/>}
         {page==='create'    && <CreateSpotPage onCreated={refetchSpot}/>}
@@ -795,6 +797,102 @@ function QRPage({ spot }) {
           </div>
         </div>
       </div>
+    </div>
+  )
+}
+
+// ── PERK CLAIMS ───────────────────────────────────────────────────────────────
+function PerkClaimsPage({ spot }) {
+  const { pending, redeemed, loading, markRedeemed } = useSpotRedemptions(spot.id)
+  const [busyId, setBusyId] = useState(null)
+
+  async function handleMark(id) {
+    setBusyId(id)
+    await markRedeemed(id)
+    setBusyId(null)
+  }
+
+  return (
+    <div style={{ animation:'up 0.3s ease' }}>
+      <PageHeader
+        eyebrow="Owed to customers"
+        title="Perk Claims"
+        sub="Customers who've filled a Spot Card or claimed an offer. Mark it off once you hand it over."
+      />
+
+      <div style={{ display:'flex', gap:12, marginBottom:26 }}>
+        {[
+          ['Waiting to claim', pending.length,  C.amber, C.amberSoft],
+          ['Handed over',      redeemed.length, C.sage,  C.sageSoft],
+        ].map(([label, value, color, soft])=>(
+          <div key={label} style={{ flex:1, background:C.card, border:`1px solid ${C.border}`, borderRadius:14, padding:'16px 18px' }}>
+            <div style={{ width:32, height:32, borderRadius:9, background:soft, display:'flex', alignItems:'center', justifyContent:'center', fontSize:15, marginBottom:9 }}>🎁</div>
+            <div style={{ fontFamily:'Fraunces,serif', fontSize:26, fontWeight:700, color }}>{value}</div>
+            <div style={{ fontSize:12, color:C.muted }}>{label}</div>
+          </div>
+        ))}
+      </div>
+
+      {loading ? (
+        <div style={{ color:C.muted, fontSize:14 }}>Loading…</div>
+      ) : pending.length === 0 && redeemed.length === 0 ? (
+        <div style={{ background:C.card, border:`1px solid ${C.border}`, borderRadius:15, padding:'46px 24px', textAlign:'center' }}>
+          <div style={{ fontSize:34, marginBottom:12 }}>🎁</div>
+          <div style={{ fontFamily:'Fraunces,serif', fontSize:17, fontWeight:700, color:C.ink, marginBottom:5 }}>No perks earned yet</div>
+          <div style={{ fontSize:13, color:C.muted }}>Once a customer fills their Spot Card, their reward shows up here.</div>
+        </div>
+      ) : (
+        <>
+          {pending.length > 0 && (
+            <div style={{ marginBottom:28 }}>
+              <div style={{ fontSize:11, fontWeight:700, color:C.amber, letterSpacing:'0.08em', textTransform:'uppercase', marginBottom:11 }}>
+                Waiting to be claimed
+              </div>
+              <div style={{ display:'flex', flexDirection:'column', gap:8 }}>
+                {pending.map(r=>(
+                  <div key={r.id} style={{ background:C.card, border:`1px solid ${C.amberBrd}`, borderRadius:13, padding:'13px 16px', display:'flex', alignItems:'center', gap:13, flexWrap:'wrap' }}>
+                    <span style={{ fontSize:20 }}>{r.profiles?.avatar || '🧑'}</span>
+                    <div style={{ flex:1, minWidth:170 }}>
+                      <div style={{ fontSize:13.5, fontWeight:600, color:C.ink }}>{r.profiles?.full_name || 'A customer'}</div>
+                      <div style={{ fontSize:12, color:C.mid }}>
+                        🎁 {r.reward_text}
+                        <span style={{ color:C.muted }}> · {r.type === 'offer' ? 'from an offer' : 'filled their card'} · {new Date(r.earned_at).toLocaleDateString()}</span>
+                      </div>
+                    </div>
+                    <code style={{ fontFamily:'monospace', fontSize:14, fontWeight:700, letterSpacing:'0.1em', background:C.amberSoft, border:`1px solid ${C.amberBrd}`, borderRadius:8, padding:'6px 11px', color:'#8A6A00', flexShrink:0 }}>
+                      {r.code}
+                    </code>
+                    <button onClick={()=>handleMark(r.id)} disabled={busyId===r.id} style={{ background:C.sage, border:'none', borderRadius:9, padding:'8px 15px', fontSize:12.5, fontWeight:600, color:'#fff', cursor:'pointer', flexShrink:0 }}>
+                      {busyId===r.id ? 'Saving…' : '✓ Handed over'}
+                    </button>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {redeemed.length > 0 && (
+            <div>
+              <div style={{ fontSize:11, fontWeight:700, color:C.muted, letterSpacing:'0.08em', textTransform:'uppercase', marginBottom:11 }}>
+                Already handed over
+              </div>
+              <div style={{ background:C.card, border:`1px solid ${C.border}`, borderRadius:15, overflow:'hidden' }}>
+                {redeemed.slice(0,25).map((r,i)=>(
+                  <div key={r.id} style={{ display:'flex', alignItems:'center', gap:12, padding:'11px 16px', borderBottom: i < Math.min(redeemed.length,25)-1 ? `1px solid ${C.border}` : 'none' }}>
+                    <span style={{ fontSize:16, opacity:0.6 }}>{r.profiles?.avatar || '🧑'}</span>
+                    <div style={{ flex:1, minWidth:0 }}>
+                      <span style={{ fontSize:13, color:C.ink }}>{r.profiles?.full_name || 'A customer'}</span>
+                      <span style={{ fontSize:12, color:C.muted, marginLeft:8 }}>{r.reward_text}</span>
+                    </div>
+                    <span style={{ fontSize:11.5, color:C.muted, flexShrink:0 }}>{new Date(r.redeemed_at).toLocaleDateString()}</span>
+                    <span style={{ color:C.sage, fontSize:13, flexShrink:0 }}>✓</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+        </>
+      )}
     </div>
   )
 }

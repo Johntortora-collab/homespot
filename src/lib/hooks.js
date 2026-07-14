@@ -60,6 +60,12 @@ export function useSpot(spotId) {
 }
 
 // ── Scan QR / add stamp ───────────────────────────────────────────────────────
+// Short, unambiguous staff-facing code. No 0/O/1/I — they get misread out loud.
+function makeCode() {
+  const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'
+  return Array.from({ length: 4 }, () => chars[Math.floor(Math.random() * chars.length)]).join('')
+}
+
 export function useStamp() {
   const { session } = useAuth()
   const [loading, setLoading] = useState(false)
@@ -109,10 +115,10 @@ export function useStamp() {
         .eq('spot_id', spotId)
         .single()
 
-      // Get spot to know the required stamps
+      // Get spot to know the required stamps + what the perk actually is
       const { data: spot } = await supabase
         .from('spots')
-        .select('stamps_required')
+        .select('stamps_required, perk')
         .eq('id', spotId)
         .single()
 
@@ -131,6 +137,20 @@ export function useStamp() {
         await supabase
           .from('stamp_cards')
           .insert({ user_id: session.user.id, spot_id: spotId, stamps: 1, lifetime: 1 })
+      }
+
+      // Card just completed → record the earned perk so it isn't forgotten the
+      // moment the card resets. reward_text is snapshotted here on purpose: if
+      // the owner later changes their perk, whoever already earned the old one
+      // still gets the old one.
+      if (perkEarned) {
+        await supabase.from('redemptions').insert({
+          user_id:     session.user.id,
+          spot_id:     spotId,
+          type:        'stamp_card',
+          reward_text: spot.perk || 'Your reward',
+          code:        makeCode(),
+        })
       }
 
       return { perkEarned }
@@ -654,3 +674,108 @@ export function useAdminSpots() {
   return { spots, loading, deleteSpot, refetch: fetchSpots }
 }
 
+
+// ── Redemptions: perks a customer has earned but not yet collected ────────────
+export function useMyPerks() {
+  const { session } = useAuth()
+  const [perks,   setPerks]   = useState([])
+  const [loading, setLoading] = useState(true)
+
+  const fetchPerks = useCallback(async () => {
+    if (!session) { setLoading(false); return }
+    setLoading(true)
+    const { data } = await supabase
+      .from('redemptions')
+      .select('*, spots(name, emoji, category)')
+      .eq('user_id', session.user.id)
+      .order('earned_at', { ascending: false })
+    setPerks(data || [])
+    setLoading(false)
+  }, [session])
+
+  useEffect(() => { fetchPerks() }, [fetchPerks])
+
+  // Customer taps "Redeem" at the counter. Guarded by .is('redeemed_at', null)
+  // so a double-tap (or a stale screen) can't burn it twice.
+  async function redeem(redemptionId) {
+    const { data, error } = await supabase
+      .from('redemptions')
+      .update({ redeemed_at: new Date().toISOString() })
+      .eq('id', redemptionId)
+      .is('redeemed_at', null)
+      .select()
+    if (!error) await fetchPerks()
+    if (!error && (!data || data.length === 0)) {
+      return { error: { message: 'This perk was already redeemed.' } }
+    }
+    return { error }
+  }
+
+  const pending  = perks.filter(p => !p.redeemed_at)
+  const redeemed = perks.filter(p =>  p.redeemed_at)
+
+  return { perks, pending, redeemed, loading, redeem, refetch: fetchPerks }
+}
+
+// ── Claim a live offer (once per person, enforced by a unique index) ──────────
+export function useClaimOffer() {
+  const { session } = useAuth()
+  const [claiming, setClaiming] = useState(false)
+
+  async function claimOffer({ offerId, spotId, message }) {
+    setClaiming(true)
+    const { error } = await supabase.from('redemptions').insert({
+      user_id:     session.user.id,
+      spot_id:     spotId,
+      type:        'offer',
+      offer_id:    offerId,
+      reward_text: message,
+      code:        makeCode(),
+    })
+    setClaiming(false)
+
+    // 23505 = unique violation on (user_id, offer_id) — they already claimed it.
+    if (error?.code === '23505') {
+      return { error: { message: "You've already claimed this offer." } }
+    }
+    return { error }
+  }
+
+  return { claimOffer, claiming }
+}
+
+// ── Owner: perks customers have earned at this spot ───────────────────────────
+export function useSpotRedemptions(spotId) {
+  const [rows,    setRows]    = useState([])
+  const [loading, setLoading] = useState(true)
+
+  const fetchRows = useCallback(async () => {
+    if (!spotId) return
+    setLoading(true)
+    const { data } = await supabase
+      .from('redemptions')
+      .select('*, profiles(full_name, avatar)')
+      .eq('spot_id', spotId)
+      .order('earned_at', { ascending: false })
+      .limit(100)
+    setRows(data || [])
+    setLoading(false)
+  }, [spotId])
+
+  useEffect(() => { fetchRows() }, [fetchRows])
+
+  async function markRedeemed(id) {
+    const { error } = await supabase
+      .from('redemptions')
+      .update({ redeemed_at: new Date().toISOString() })
+      .eq('id', id)
+      .is('redeemed_at', null)
+    if (!error) await fetchRows()
+    return { error }
+  }
+
+  const pending  = rows.filter(r => !r.redeemed_at)
+  const redeemed = rows.filter(r =>  r.redeemed_at)
+
+  return { rows, pending, redeemed, loading, markRedeemed, refetch: fetchRows }
+}
