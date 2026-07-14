@@ -98,6 +98,7 @@ export default function OwnerDashboard() {
         .ow-sidebar { width:215px; position:sticky; top:0; height:100vh; }
         .ow-main    { padding:30px 34px; max-width:880px; }
         .ow-bottomnav { display:none; }
+        .ow-signout-mobile { display:none; }
 
         @media (max-width: 820px) {
           .ow-shell { flex-direction:column; }
@@ -107,6 +108,7 @@ export default function OwnerDashboard() {
             padding:12px 16px !important;
           }
           .ow-sidebar nav, .ow-sidebar .ow-signout { display:none; }
+          .ow-signout-mobile { display:block !important; }
           .ow-spotbadge { margin-top:0 !important; }
           .ow-main { padding:18px 16px 90px; max-width:none; }
           .ow-bottomnav {
@@ -139,6 +141,14 @@ export default function OwnerDashboard() {
             </button>
           ))}
         </nav>
+
+        <button
+          className="ow-signout-mobile"
+          onClick={signOut}
+          style={{ background:'rgba(255,255,255,0.08)', border:'1px solid rgba(255,255,255,0.12)', borderRadius:20, padding:'7px 14px', fontSize:12, fontWeight:600, color:'rgba(255,255,255,0.75)', cursor:'pointer', flexShrink:0 }}
+        >
+          Sign out
+        </button>
 
         <div className="ow-signout" style={{ padding:'14px 18px', borderTop:'1px solid rgba(255,255,255,0.07)' }}>
           <div style={{ fontSize:11, color:'rgba(255,255,255,0.35)', marginBottom:8 }}>{profile?.full_name}</div>
