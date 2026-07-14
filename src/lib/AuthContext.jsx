@@ -92,15 +92,25 @@ export function AuthProvider({ children }) {
     })
   }
 
-  async function signOut() {
-    // Plain and standard. supabase.auth.signOut() removes the stored session
-    // itself; the reload then clears all in-memory React state, which a soft
-    // re-render was leaving behind.
+  function signOut() {
+    // Do NOT await supabase.auth.signOut(). Its default 'global' scope makes a
+    // network call to revoke the session server-side, and that call can hang
+    // indefinitely — which blocked the reload below and made the button appear
+    // completely dead: no error, no reload, nothing.
+    //
+    // So: clear the stored session synchronously, kick off the sign-out without
+    // waiting on it, and reload immediately.
     try {
-      await supabase.auth.signOut()
+      Object.keys(localStorage)
+        .filter(k => k.startsWith('sb-') && k.endsWith('-auth-token'))
+        .forEach(k => localStorage.removeItem(k))
     } catch (err) {
-      console.error('Sign out error:', err)
+      console.error('Could not clear stored session:', err)
     }
+
+    // scope:'local' skips the network round-trip entirely. Fire and forget.
+    supabase.auth.signOut({ scope: 'local' }).catch(err => console.error('Sign out:', err))
+
     window.location.replace('/')
   }
 
