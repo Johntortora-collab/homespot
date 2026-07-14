@@ -1,5 +1,6 @@
-import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
+import { BrowserRouter, Routes, Route, Navigate, useParams } from 'react-router-dom'
 import { AuthProvider, useAuth } from './lib/AuthContext'
+import { useMySpot } from './lib/hooks'
 
 // Consumer pages
 import ConsumerApp     from './pages/consumer/ConsumerApp'
@@ -44,6 +45,7 @@ function Router() {
     <Routes>
       {legalRoutes}
       <Route path="/admin"           element={<AdminTowns />} />
+      <Route path="/scan/:spotId"    element={<OwnerScanRoute />} />
       <Route path="/owner/onboard"   element={<OwnerOnboarding />} />
       <Route path="/owner/dashboard" element={<OwnerDashboard />} />
       <Route path="*"                element={<Navigate to="/owner/dashboard" />} />
@@ -59,6 +61,22 @@ function Router() {
       <Route path="/*"            element={<ConsumerApp />} />
     </Routes>
   )
+}
+
+// An owner tapped a tag. Whose?
+//   Their own  → straight to the dashboard (that's the shortcut they want).
+//   Someone else's → treat them as a customer and let them earn a stamp.
+// Without this, the catch-all "*" route swallowed every /scan/ URL and sent
+// owners to their dashboard no matter whose counter they were standing at —
+// meaning a shop owner could never collect stamps anywhere in their own town.
+function OwnerScanRoute() {
+  const { spotId } = useParams()
+  const { spot, loading } = useMySpot()
+
+  if (loading) return <Loader />
+  if (spot && spot.id === spotId) return <Navigate to="/owner/dashboard" replace />
+
+  return <ConsumerApp />
 }
 
 function Loader() {

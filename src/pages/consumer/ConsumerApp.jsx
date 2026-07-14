@@ -1054,6 +1054,11 @@ function Profile({ onSwitch, onNav }) {
   }
 
   const items = [
+    // An owner can browse and earn stamps like anyone else (e.g. the baker
+    // collecting a coffee card across the street) — give them a way back.
+    ...(profile?.role === 'owner'
+      ? [['My Business Dashboard','🏪', () => { window.location.href = '/owner/dashboard' }]]
+      : []),
     ['My Spot Cards','🗂', () => onNav('perks','perks')],
     ['Main Street','🏘️', () => onNav('block','block')],
     ['Invite Friends','💌', handleInvite],
