@@ -621,6 +621,7 @@ function Field({ label, hint, children }) {
 
 function QRPage({ spot }) {
   const [copied, setCopied] = useState(false)
+  const [nfcCopied, setNfcCopied] = useState(false)
   const canvasRef = useRef(null)
   const spotUrl = `${window.location.origin}/scan/${spot.id}`
 
@@ -628,10 +629,10 @@ function QRPage({ spot }) {
     if (!canvasRef.current) return
     import('qrcode').then(QRCode => {
       QRCode.toCanvas(canvasRef.current, spotUrl, {
-        width: 280,
-        margin: 1,
-        color: { dark: C.navy, light: '#FFFFFF00' },
-        errorCorrectionLevel: 'H', // high correction so a logo overlay or slight print damage still scans
+        width: 560,
+        margin: 4,                                        // spec minimum is 4 — anything less and iOS refuses to lock on
+        color: { dark: '#000000', light: '#FFFFFFFF' },   // pure black on OPAQUE white; navy-on-transparent was killing contrast
+        errorCorrectionLevel: 'M',
       })
     })
   }, [spotUrl])
@@ -643,10 +644,10 @@ function QRPage({ spot }) {
     import('qrcode').then(QRCode => {
       const printCanvas = document.createElement('canvas')
       QRCode.toCanvas(printCanvas, spotUrl, {
-        width: 1200,
-        margin: 2,
-        color: { dark: '#1A1A2E', light: '#FFFFFFFF' },
-        errorCorrectionLevel: 'H',
+        width: 1400,
+        margin: 4,
+        color: { dark: '#000000', light: '#FFFFFFFF' },
+        errorCorrectionLevel: 'M',
       }, () => {
         const link = document.createElement('a')
         link.download = `homespot-qr-${spot.name.toLowerCase().replace(/\s+/g,'-')}.png`
@@ -661,14 +662,12 @@ function QRPage({ spot }) {
       <PageHeader eyebrow="Scan to earn stamps" title="Your Spot QR Code" sub="Print it and put it by the register — customers scan it to stamp their Spot Card"/>
 
       <div className="ow-qr-grid">
-        <div style={{ background:C.card, border:`1px solid ${C.border}`, borderRadius:18, padding:'26px', textAlign:'center', width:250 }}>
+        <div style={{ background:C.card, border:`1px solid ${C.border}`, borderRadius:18, padding:'26px', textAlign:'center', width:290 }}>
           {/* Real scannable QR code */}
-          <div style={{ width:178, height:178, margin:'0 auto 14px', background:'#fff', borderRadius:13, display:'flex', alignItems:'center', justifyContent:'center', border:`1px solid ${C.border}`, position:'relative', overflow:'hidden' }}>
-            <canvas ref={canvasRef} style={{ width:158, height:158 }}/>
-            {/* Logo badge overlay - high error correction tolerates this */}
-            <div style={{ position:'absolute', width:34, height:34, background:C.amber, borderRadius:9, display:'flex', alignItems:'center', justifyContent:'center', boxShadow:'0 0 0 4px #fff' }}>
-              <span style={{ fontSize:16 }}>{spot.emoji}</span>
-            </div>
+          {/* No logo overlay — it covered ~20% of the code and hurt scan reliability.
+              The QR is rendered large and pure black-on-white so phones lock on instantly. */}
+          <div style={{ width:210, height:210, margin:'0 auto 14px', background:'#fff', borderRadius:13, display:'flex', alignItems:'center', justifyContent:'center', border:`1px solid ${C.border}`, overflow:'hidden' }}>
+            <canvas ref={canvasRef} style={{ width:200, height:200 }}/>
           </div>
 
           <div style={{ fontFamily:'Fraunces,serif', fontSize:15, fontWeight:700, color:C.ink, marginBottom:2 }}>{spot.name}</div>
@@ -709,6 +708,50 @@ function QRPage({ spot }) {
               {' '}— share this anywhere for customers to find you directly.
             </div>
           </div>
+        </div>
+      </div>
+
+      {/* ── NFC tap tag ─────────────────────────────────────────────── */}
+      <div style={{ marginTop:34 }}>
+        <div style={{ display:'flex', alignItems:'center', gap:10, marginBottom:6 }}>
+          <h2 style={{ fontFamily:'Fraunces,serif', fontSize:21, fontWeight:700, color:C.ink }}>Or let them just tap</h2>
+          <span style={{ fontSize:10, fontWeight:700, color:C.sage, background:C.sageSoft, border:`1px solid ${C.sage}55`, borderRadius:20, padding:'2px 9px', letterSpacing:'0.05em' }}>EASIER</span>
+        </div>
+        <p style={{ fontSize:13.5, color:C.muted, marginBottom:18, maxWidth:620, lineHeight:1.6 }}>
+          An NFC sticker on your counter lets customers earn a stamp by tapping their phone to it —
+          no camera, no aiming. Works on iPhone and Android. The sticker just holds your spot link below.
+        </p>
+
+        <div style={{ background:C.card, border:`1px solid ${C.border}`, borderRadius:15, padding:'18px 20px', marginBottom:14 }}>
+          <div style={{ fontSize:11, fontWeight:700, color:C.amber, letterSpacing:'0.08em', textTransform:'uppercase', marginBottom:8 }}>
+            Write this link to your tag
+          </div>
+          <div style={{ display:'flex', gap:9, alignItems:'center', flexWrap:'wrap' }}>
+            <code style={{ flex:1, minWidth:240, fontFamily:'monospace', fontSize:12, background:C.bg, border:`1px solid ${C.border}`, borderRadius:9, padding:'11px 13px', color:C.ink, wordBreak:'break-all' }}>
+              {spotUrl}
+            </code>
+            <button
+              onClick={()=>{ navigator.clipboard?.writeText(spotUrl); setNfcCopied(true); setTimeout(()=>setNfcCopied(false),2000) }}
+              style={{ background:nfcCopied?C.sage:C.navy, border:'none', borderRadius:9, padding:'11px 18px', fontSize:13, fontWeight:600, color:'#fff', cursor:'pointer', transition:'all 0.2s', flexShrink:0 }}
+            >
+              {nfcCopied ? '✓ Copied' : '⎘ Copy'}
+            </button>
+          </div>
+        </div>
+
+        <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fit,minmax(240px,1fr))', gap:12 }}>
+          {[
+            ['🏷️','Buy NTAG215 stickers','Search "NFC stickers NTAG215" — about $0.30 each. Any brand works.'],
+            ['✍️','Write the link to it','Install the free "NFC Tools" app, tap Write → Add a record → URL, paste the link above, hold your phone to the sticker.'],
+            ['🔒','Lock it (optional)','NFC Tools can make the tag read-only so nobody can overwrite it later.'],
+            ['🏪','Stick it on the counter','Customers tap their phone to it and the stamp lands automatically.'],
+          ].map(([ic,ti,bo])=>(
+            <div key={ti} style={{ background:C.card, border:`1px solid ${C.border}`, borderRadius:13, padding:'14px 15px' }}>
+              <div style={{ width:34, height:34, background:C.sageSoft, borderRadius:9, display:'flex', alignItems:'center', justifyContent:'center', fontSize:16, marginBottom:9 }}>{ic}</div>
+              <div style={{ fontSize:13, fontWeight:600, color:C.ink, marginBottom:3 }}>{ti}</div>
+              <div style={{ fontSize:12, color:C.muted, lineHeight:1.5 }}>{bo}</div>
+            </div>
+          ))}
         </div>
       </div>
     </div>

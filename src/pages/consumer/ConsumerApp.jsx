@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { useParams } from 'react-router-dom'
 import { useAuth } from '../../lib/AuthContext'
 import { useSpots, useStamp, useFeedback, useMyCards, useBlockFeed, useTowns, useTownRequest, useFounderStatus } from '../../lib/hooks'
@@ -52,6 +52,7 @@ export default function ConsumerApp() {
   const [showScanner, setShowScanner] = useState(false)
   const [scanFlash,   setScanFlash]   = useState(null) // 'not-found' | null
   const [requestTownAfterAuth, setRequestTownAfterAuth] = useState(false)
+  const [autoStamp, setAutoStamp] = useState(false)
 
   // User picks a town → save it, then go to signup if not logged in
   function selectTown(town) {
@@ -118,10 +119,13 @@ export default function ConsumerApp() {
     openSpot(scannedSpotId)
   }
 
-  // Deep link support: opening /scan/:spotId (e.g. via phone's native camera app)
-  // jumps straight to that spot once the person is signed in and has a town set
+  // Deep link support: opening /scan/:spotId — via an NFC tap, or by pointing the
+  // phone's native camera at the printed QR. Either way the person is physically at
+  // the counter, so we grant the stamp immediately rather than making them scan again.
+  // useStamp's once-per-day guard still applies, so re-opening the link does nothing.
   useEffect(() => {
     if (urlSpotId && session && townId) {
+      setAutoStamp(true)
       openSpot(urlSpotId)
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -197,7 +201,7 @@ export default function ConsumerApp() {
           {screen==='signup'     && <SignupScreen town={pendingTown} authMode={authMode} setAuthMode={setAuthMode} onSignup={handleSignup} onSignIn={handleSignIn} onBack={()=>{ setRequestTownAfterAuth(false); setScreen('townselect') }}/>}
           {screen==='requesttown' && <RequestTownScreen onBack={()=>setScreen(townId ? 'home' : 'townselect')} onSubmitted={()=>setScreen(townId ? 'home' : 'townselect')}/>}
           {screen==='home'       && <Home townId={townId} town={townData} cat={cat} setCat={setCat} onSpot={openSpot} onNav={nav}/>}
-          {screen==='spot'       && <SpotDetail spotId={spotId} onBack={goHome}/>}
+          {screen==='spot'       && <SpotDetail spotId={spotId} onBack={goHome} autoStamp={autoStamp} onAutoStampDone={()=>setAutoStamp(false)}/>}
           {screen==='perks'      && <Perks onSpot={openSpot}/>}
           {screen==='block'      && <Block townId={townId} town={townData}/>}
           {screen==='profile'    && <Profile onSwitch={()=>setScreen('townselect')} onNav={nav}/>}
@@ -574,7 +578,7 @@ function Home({ townId, town, cat, setCat, onSpot, onNav }) {
 }
 
 // ── SPOT DETAIL ───────────────────────────────────────────────────────────────
-function SpotDetail({ spotId, onBack }) {
+function SpotDetail({ spotId, onBack, autoStamp = false, onAutoStampDone = () => {} }) {
   const { profile } = useAuth()
   const [spot,    setSpot]    = useState(null)
   const [loading, setLoading] = useState(true)
@@ -596,6 +600,17 @@ function SpotDetail({ spotId, onBack }) {
     supabase.from('spots_with_stamps').select('*').eq('id', spotId).single()
       .then(({ data }) => { setSpot(data); setLoading(false) })
   }, [spotId])
+
+  // Arrived by tapping an NFC tag (or the printed QR via the native camera):
+  // stamp immediately, once the spot has loaded. The ref guard keeps this from
+  // double-firing under React StrictMode's double-invoked effects.
+  const autoStampFired = useRef(false)
+  useEffect(() => {
+    if (!autoStamp || !spot || autoStampFired.current) return
+    autoStampFired.current = true
+    applyStamp().finally(onAutoStampDone)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [autoStamp, spot])
 
   async function applyStamp() {
     if (!spot || stamping) return
