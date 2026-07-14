@@ -756,7 +756,7 @@ export function useSpotRedemptions(spotId) {
     setLoading(true)
     const { data } = await supabase
       .from('redemptions')
-      .select('*, profiles(full_name, avatar)')
+      .select('*, profiles(full_name, avatar, email)')
       .eq('spot_id', spotId)
       .order('earned_at', { ascending: false })
       .limit(100)

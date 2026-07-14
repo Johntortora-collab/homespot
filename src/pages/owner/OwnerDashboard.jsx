@@ -855,8 +855,13 @@ function PerkClaimsPage({ spot }) {
                   <div key={r.id} style={{ background:C.card, border:`1px solid ${C.amberBrd}`, borderRadius:13, padding:'13px 16px', display:'flex', alignItems:'center', gap:13, flexWrap:'wrap' }}>
                     <span style={{ fontSize:20 }}>{r.profiles?.avatar || '🧑'}</span>
                     <div style={{ flex:1, minWidth:170 }}>
-                      <div style={{ fontSize:13.5, fontWeight:600, color:C.ink }}>{r.profiles?.full_name || 'A customer'}</div>
-                      <div style={{ fontSize:12, color:C.mid }}>
+                      <div style={{ fontSize:13.5, fontWeight:600, color:C.ink }}>
+                        {r.profiles?.full_name || r.profiles?.email || 'A customer'}
+                      </div>
+                      {r.profiles?.full_name && r.profiles?.email && (
+                        <div style={{ fontSize:11.5, color:C.muted }}>{r.profiles.email}</div>
+                      )}
+                      <div style={{ fontSize:12, color:C.mid, marginTop:1 }}>
                         🎁 {r.reward_text}
                         <span style={{ color:C.muted }}> · {r.type === 'offer' ? 'from an offer' : 'filled their card'} · {new Date(r.earned_at).toLocaleDateString()}</span>
                       </div>
@@ -883,7 +888,7 @@ function PerkClaimsPage({ spot }) {
                   <div key={r.id} style={{ display:'flex', alignItems:'center', gap:12, padding:'11px 16px', borderBottom: i < Math.min(redeemed.length,25)-1 ? `1px solid ${C.border}` : 'none' }}>
                     <span style={{ fontSize:16, opacity:0.6 }}>{r.profiles?.avatar || '🧑'}</span>
                     <div style={{ flex:1, minWidth:0 }}>
-                      <span style={{ fontSize:13, color:C.ink }}>{r.profiles?.full_name || 'A customer'}</span>
+                      <span style={{ fontSize:13, color:C.ink }}>{r.profiles?.full_name || r.profiles?.email || 'A customer'}</span>
                       <span style={{ fontSize:12, color:C.muted, marginLeft:8 }}>{r.reward_text}</span>
                     </div>
                     <span style={{ fontSize:11.5, color:C.muted, flexShrink:0 }}>{new Date(r.redeemed_at).toLocaleDateString()}</span>
