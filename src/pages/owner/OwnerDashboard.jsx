@@ -55,6 +55,7 @@ export default function OwnerDashboard() {
     { id:'perks',     label:'Perk Claims', icon:'🎁' },
     { id:'feedback',  label:'Feedback',   icon:'◻' },
     { id:'qr',        label:'Tap Tag',    icon:'📲' },
+    { id:'settings',  label:'Settings',   icon:'⚙' },
   ] : [
     { id:'create',    label:'Create Spot', icon:'✦' },
   ]
@@ -151,6 +152,7 @@ export default function OwnerDashboard() {
         {page==='customers' && spot && <Customers spot={spot}/>}
         {page==='offer'     && spot && <SendOfferPage spot={spot}/>}
         {page==='perks'     && spot && <PerkClaimsPage spot={spot}/>}
+        {page==='settings'  && spot && <SettingsPage spot={spot} onSaved={refetchSpot}/>}
         {page==='feedback'  && spot && <FeedbackPage spot={spot}/>}
         {page==='qr'        && spot && <QRPage spot={spot}/>}
         {page==='create'    && <CreateSpotPage onCreated={refetchSpot}/>}
@@ -893,6 +895,181 @@ function PerkClaimsPage({ spot }) {
           )}
         </>
       )}
+    </div>
+  )
+}
+
+// ── SETTINGS ──────────────────────────────────────────────────────────────────
+const EDIT_CATEGORIES = ['Bakery','Coffee','Restaurant','Salon','Barbershop','Bookshop','Florist','Gym','Boutique','Auto','Pet care','Other']
+const EDIT_PERK_IDEAS = ['Free coffee','Free pastry','10% off','Free dessert','$5 off','Free item of choice']
+const EDIT_EMOJIS     = ['🥐','☕','🍕','✂️','📚','🌸','💪','🎨','🛒','🐾','🔧','🏪','🍔','🍣','🧁','🌮','🍷','🎵']
+
+function SettingsPage({ spot, onSaved }) {
+  const { updateSpot, deleteSpot, saving, error } = useManageSpot()
+  const [f, setF] = useState({
+    name:     spot.name || '',
+    emoji:    spot.emoji || '🏪',
+    category: spot.category || '',
+    tagline:  spot.tagline || '',
+    phone:    spot.phone || '',
+    address:  spot.address || '',
+    stamps_required: String(spot.stamps_required ?? 8),
+    perk:     spot.perk || '',
+  })
+  const [savedMsg,  setSavedMsg]  = useState(false)
+  const [confirmDel, setConfirmDel] = useState(false)
+  const [delText,   setDelText]   = useState('')
+  const [pausing,   setPausing]   = useState(false)
+
+  const up = (k,v) => setF(p => ({ ...p, [k]: v }))
+  const stampsChanged = parseInt(f.stamps_required) !== spot.stamps_required
+  const ready = f.name.trim() && f.category && f.perk.trim()
+
+  async function handleSave() {
+    const { error: err } = await updateSpot(spot.id, {
+      ...f,
+      stamps_required: parseInt(f.stamps_required),
+    })
+    if (!err) {
+      setSavedMsg(true)
+      setTimeout(()=>setSavedMsg(false), 2600)
+      onSaved()
+    }
+  }
+
+  async function handlePause() {
+    setPausing(true)
+    await updateSpot(spot.id, { active: !spot.active })
+    setPausing(false)
+    onSaved()
+  }
+
+  async function handleDelete() {
+    const { error: err } = await deleteSpot(spot.id)
+    if (!err) window.location.reload()
+  }
+
+  return (
+    <div style={{ animation:'up 0.3s ease' }}>
+      <PageHeader eyebrow="Your business" title="Settings" sub="Update your listing, loyalty card, and reward"/>
+
+      {savedMsg && (
+        <div style={{ background:C.sageSoft, border:`1px solid ${C.sage}55`, borderRadius:11, padding:'11px 15px', fontSize:13, color:'#3D6B27', marginBottom:16, fontWeight:500 }}>
+          ✓ Saved — customers see the update right away
+        </div>
+      )}
+      {error && (
+        <div style={{ background:'#FEF2F2', border:'1px solid #FECACA', borderRadius:11, padding:'11px 15px', fontSize:13, color:'#DC2626', marginBottom:16 }}>
+          ⚠ {error}
+        </div>
+      )}
+
+      <div style={{ background:C.card, border:`1px solid ${C.border}`, borderRadius:17, padding:'24px', maxWidth:580, display:'flex', flexDirection:'column', gap:18, marginBottom:20 }}>
+        <Field label="Icon">
+          <div style={{ display:'flex', flexWrap:'wrap', gap:7 }}>
+            {EDIT_EMOJIS.map(em=>(
+              <button key={em} onClick={()=>up('emoji',em)} style={{ width:38, height:38, borderRadius:9, fontSize:19, background:f.emoji===em?C.amberSoft:C.bg, border:`2px solid ${f.emoji===em?C.amber:C.border}`, cursor:'pointer', transition:'all 0.15s' }}>{em}</button>
+            ))}
+          </div>
+        </Field>
+
+        <Field label="Business name">
+          <SimpleInput value={f.name} onChange={v=>up('name',v)} placeholder="e.g. Rosa's Bakery"/>
+        </Field>
+
+        <Field label="Category">
+          <select value={f.category} onChange={e=>up('category',e.target.value)} style={{ width:'100%', background:C.bg, border:`1.5px solid ${C.border}`, borderRadius:11, padding:'12px 14px', fontSize:14, color:C.ink, cursor:'pointer' }}>
+            <option value="">Select…</option>
+            {EDIT_CATEGORIES.map(c=><option key={c} value={c}>{c}</option>)}
+          </select>
+        </Field>
+
+        <Field label="One-line description">
+          <SimpleInput value={f.tagline} onChange={v=>up('tagline',v)} placeholder="Family-owned since 1987" maxLength={50}/>
+        </Field>
+
+        <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:13 }}>
+          <Field label="Phone"><SimpleInput type="tel" value={f.phone} onChange={v=>up('phone',v)} placeholder="(555) 000-0000"/></Field>
+          <Field label="Address"><SimpleInput value={f.address} onChange={v=>up('address',v)} placeholder="123 Main St"/></Field>
+        </div>
+
+        <div style={{ height:1, background:C.border, margin:'4px 0' }}/>
+
+        <Field label="Stamps needed for a reward">
+          <div style={{ display:'flex', alignItems:'center', gap:14 }}>
+            <input type="range" min={4} max={15} value={f.stamps_required} onChange={e=>up('stamps_required',e.target.value)} style={{ flex:1, accentColor:C.amber }}/>
+            <div style={{ fontFamily:'Fraunces,serif', fontSize:24, fontWeight:700, color:C.amber, minWidth:28 }}>{f.stamps_required}</div>
+          </div>
+          {stampsChanged && (
+            <div style={{ background:C.amberSoft, border:`1px solid ${C.amberBrd}`, borderRadius:9, padding:'9px 12px', fontSize:12, color:'#8A6A00', marginTop:9, lineHeight:1.5 }}>
+              ⚠ Customers already collecting stamps will be measured against the new number.
+              Anyone who has <strong>already earned</strong> a reward still gets what they earned — that's locked in.
+            </div>
+          )}
+        </Field>
+
+        <Field label="What do they earn?">
+          <SimpleInput value={f.perk} onChange={v=>up('perk',v)} placeholder="e.g. Free pastry of your choice" maxLength={50}/>
+          <div style={{ display:'flex', flexWrap:'wrap', gap:7, marginTop:9 }}>
+            {EDIT_PERK_IDEAS.map(p=>(
+              <button key={p} onClick={()=>up('perk',p)} style={{ background:f.perk===p?C.amberSoft:C.bg, border:`1px solid ${f.perk===p?C.amber:C.border}`, borderRadius:20, padding:'5px 12px', fontSize:12, color:f.perk===p?'#8A6A00':C.mid, cursor:'pointer' }}>{p}</button>
+            ))}
+          </div>
+        </Field>
+
+        <button onClick={handleSave} disabled={!ready||saving} style={{ background:ready&&!saving?C.amber:'#E8E3DC', border:'none', borderRadius:12, padding:'13px', fontSize:14.5, fontWeight:600, color:ready&&!saving?C.navy:C.muted, cursor:ready&&!saving?'pointer':'default', transition:'all 0.2s' }}>
+          {saving ? 'Saving…' : 'Save changes'}
+        </button>
+      </div>
+
+      {/* Danger zone */}
+      <div style={{ maxWidth:580, border:'1px solid #FECACA', background:'#FFFBFB', borderRadius:17, padding:'20px 22px' }}>
+        <div style={{ fontFamily:'Fraunces,serif', fontSize:15, fontWeight:700, color:'#B91C1C', marginBottom:14 }}>Danger zone</div>
+
+        <div style={{ display:'flex', alignItems:'center', gap:14, paddingBottom:15, marginBottom:15, borderBottom:'1px solid #FECACA', flexWrap:'wrap' }}>
+          <div style={{ flex:1, minWidth:200 }}>
+            <div style={{ fontSize:13.5, fontWeight:600, color:C.ink }}>{spot.active ? 'Pause your listing' : 'Listing is paused'}</div>
+            <div style={{ fontSize:12, color:C.muted, lineHeight:1.5 }}>
+              {spot.active
+                ? 'Hides you from the app. Stamps and rewards are kept — nothing is lost.'
+                : 'Customers currently cannot see or find you in the app.'}
+            </div>
+          </div>
+          <button onClick={handlePause} disabled={pausing} style={{ background:spot.active?'none':C.sage, border:spot.active?`1px solid ${C.border}`:'none', borderRadius:9, padding:'9px 16px', fontSize:12.5, fontWeight:600, color:spot.active?C.mid:'#fff', cursor:'pointer', flexShrink:0 }}>
+            {pausing ? '…' : spot.active ? 'Pause' : 'Go live again'}
+          </button>
+        </div>
+
+        <div style={{ fontSize:13.5, fontWeight:600, color:C.ink, marginBottom:3 }}>Delete this business</div>
+        <div style={{ fontSize:12, color:C.muted, lineHeight:1.55, marginBottom:12 }}>
+          Permanently removes your listing and <strong>every customer's stamps, rewards, and history</strong> with it.
+          This cannot be undone. If you just want to close temporarily, pause instead.
+        </div>
+
+        {!confirmDel ? (
+          <button onClick={()=>setConfirmDel(true)} style={{ background:'none', border:'1px solid #FCA5A5', borderRadius:9, padding:'9px 16px', fontSize:12.5, fontWeight:600, color:'#DC2626', cursor:'pointer' }}>
+            Delete business
+          </button>
+        ) : (
+          <div>
+            <div style={{ fontSize:12.5, color:'#B91C1C', marginBottom:8 }}>
+              Type <strong>{spot.name}</strong> to confirm:
+            </div>
+            <div style={{ display:'flex', gap:8, flexWrap:'wrap' }}>
+              <input value={delText} onChange={e=>setDelText(e.target.value)} placeholder={spot.name}
+                style={{ flex:1, minWidth:180, background:'#fff', border:'1px solid #FCA5A5', borderRadius:9, padding:'9px 12px', fontSize:13 }}/>
+              <button onClick={handleDelete} disabled={delText !== spot.name || saving}
+                style={{ background: delText===spot.name ? '#DC2626' : '#F3D3D3', border:'none', borderRadius:9, padding:'9px 16px', fontSize:12.5, fontWeight:600, color:'#fff', cursor: delText===spot.name ? 'pointer' : 'default', flexShrink:0 }}>
+                {saving ? 'Deleting…' : 'Delete forever'}
+              </button>
+              <button onClick={()=>{ setConfirmDel(false); setDelText('') }}
+                style={{ background:'none', border:`1px solid ${C.border}`, borderRadius:9, padding:'9px 14px', fontSize:12.5, color:C.mid, cursor:'pointer', flexShrink:0 }}>
+                Cancel
+              </button>
+            </div>
+          </div>
+        )}
+      </div>
     </div>
   )
 }
