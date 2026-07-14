@@ -621,7 +621,6 @@ function Field({ label, hint, children }) {
 
 function QRPage({ spot }) {
   const [copied, setCopied] = useState(false)
-  const [nfcCopied, setNfcCopied] = useState(false)
   const canvasRef = useRef(null)
   const spotUrl = `${window.location.origin}/scan/${spot.id}`
 
@@ -666,52 +665,33 @@ function QRPage({ spot }) {
       />
 
       {/* ── PRIMARY: NFC tap tag ─────────────────────────────────────── */}
-      <div style={{ background:C.card, border:`1px solid ${C.border}`, borderRadius:18, padding:'24px', marginBottom:16 }}>
-        <div style={{ display:'flex', alignItems:'center', gap:14, marginBottom:18 }}>
+      <div style={{ background:C.card, border:`1px solid ${C.border}`, borderRadius:18, padding:'24px', marginBottom:14 }}>
+        <div style={{ display:'flex', alignItems:'center', gap:14 }}>
           <div style={{ width:52, height:52, borderRadius:14, background:`linear-gradient(135deg,${C.amber},#E8956D)`, display:'flex', alignItems:'center', justifyContent:'center', fontSize:24, flexShrink:0 }}>📲</div>
           <div>
             <div style={{ fontFamily:'Fraunces,serif', fontSize:17, fontWeight:700, color:C.ink }}>{spot.name}</div>
             <div style={{ fontSize:12, color:C.muted }}>{spot.towns?.name} · {spot.emoji} · one stamp per customer per day</div>
           </div>
         </div>
-
-        <div style={{ fontSize:11, fontWeight:700, color:C.amber, letterSpacing:'0.08em', textTransform:'uppercase', marginBottom:8 }}>
-          Write this link to your tag
-        </div>
-        <div style={{ display:'flex', gap:9, alignItems:'center', flexWrap:'wrap' }}>
-          <code style={{ flex:1, minWidth:240, fontFamily:'monospace', fontSize:12, background:C.bg, border:`1px solid ${C.border}`, borderRadius:9, padding:'12px 13px', color:C.ink, wordBreak:'break-all' }}>
-            {spotUrl}
-          </code>
-          <button
-            onClick={()=>{ navigator.clipboard?.writeText(spotUrl); setNfcCopied(true); setTimeout(()=>setNfcCopied(false),2000) }}
-            style={{ background:nfcCopied?C.sage:C.navy, border:'none', borderRadius:9, padding:'12px 20px', fontSize:13, fontWeight:600, color:'#fff', cursor:'pointer', transition:'all 0.2s', flexShrink:0 }}
-          >
-            {nfcCopied ? '✓ Copied' : '⎘ Copy'}
-          </button>
-        </div>
       </div>
 
-      <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fit,minmax(230px,1fr))', gap:12, marginBottom:34 }}>
-        {[
-          ['🏷️','Buy NTAG215 stickers','Search "NFC stickers NTAG215" — about $0.30 each. Any brand works.'],
-          ['✍️','Write the link to it','Install the free "NFC Tools" app → Write → Add a record → URL → paste the link above → hold your phone to the sticker.'],
-          ['🔒','Lock it (optional)','NFC Tools can make the tag read-only so nobody can overwrite it later.'],
-          ['🏪','Stick it on the counter','Customers tap their phone to it and the stamp lands automatically.'],
-        ].map(([ic,ti,bo])=>(
-          <div key={ti} style={{ background:C.card, border:`1px solid ${C.border}`, borderRadius:13, padding:'14px 15px' }}>
-            <div style={{ width:34, height:34, background:C.sageSoft, borderRadius:9, display:'flex', alignItems:'center', justifyContent:'center', fontSize:16, marginBottom:9 }}>{ic}</div>
-            <div style={{ fontSize:13, fontWeight:600, color:C.ink, marginBottom:3 }}>{ti}</div>
-            <div style={{ fontSize:12, color:C.muted, lineHeight:1.5 }}>{bo}</div>
+      <div style={{ background:C.sageSoft, border:`1px solid ${C.sage}50`, borderRadius:14, padding:'16px 18px', marginBottom:34, display:'flex', gap:12 }}>
+        <span style={{ fontSize:19, lineHeight:1 }}>✅</span>
+        <div>
+          <div style={{ fontSize:13.5, fontWeight:600, color:'#3D6B27', marginBottom:3 }}>Your tap sticker is on its way</div>
+          <div style={{ fontSize:12.5, color:'#4A7A32', lineHeight:1.55 }}>
+            We set up and send you a ready-to-go tap sticker — nothing to configure. Just place it where
+            customers check out. They tap their phone to it and a stamp lands on their Spot Card instantly.
           </div>
-        ))}
+        </div>
       </div>
 
       {/* ── FALLBACK: printable QR ───────────────────────────────────── */}
       <div style={{ borderTop:`1px solid ${C.border}`, paddingTop:26 }}>
         <h2 style={{ fontFamily:'Fraunces,serif', fontSize:18, fontWeight:700, color:C.ink, marginBottom:5 }}>Backup: printable QR code</h2>
         <p style={{ fontSize:13, color:C.muted, marginBottom:16, maxWidth:600, lineHeight:1.6 }}>
-          Older iPhones (before the XR) and some budget Androids can't read NFC tags. Print this and keep it
-          next to your tap sticker so nobody gets left out — it does exactly the same thing.
+          Older iPhones (before the XR) and some budget Androids can't read tap stickers. Print this and keep it
+          next to your sticker so nobody gets left out — it does exactly the same thing.
         </p>
 
         <div style={{ background:C.card, border:`1px solid ${C.border}`, borderRadius:15, padding:'18px', display:'flex', gap:20, alignItems:'center', flexWrap:'wrap' }}>
