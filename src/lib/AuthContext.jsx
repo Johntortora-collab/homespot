@@ -93,14 +93,17 @@ export function AuthProvider({ children }) {
   }
 
   function signOut() {
-    // Clear storage FIRST and synchronously. Anything async here is a race:
-    // a token refresh in flight can rewrite the session key after we've asked
-    // the SDK to remove it, which restores the login on reload — indis-
-    // tinguishable from the button doing nothing.
-    try { localStorage.clear() }   catch (err) { console.error(err) }
-    try { sessionStorage.clear() } catch (err) { console.error(err) }
+    // Clear the stored session synchronously, before any async call can race
+    // with it. (Until now this cleared nothing at all — the client wasn't
+    // persisting the session anywhere, so there was no token to remove.)
+    try {
+      localStorage.removeItem('homespot-auth')
+      sessionStorage.clear()
+    } catch (err) {
+      console.error('Could not clear stored session:', err)
+    }
 
-    // Fire and forget. Never await: on mobile this request can hang, and
+    // Fire and forget — never await. On mobile this request can hang, and
     // everything after it would be stuck behind it.
     try { supabase.auth.signOut({ scope: 'local' }) } catch (err) { console.error(err) }
 
@@ -108,9 +111,9 @@ export function AuthProvider({ children }) {
     setProfile(null)
     setProfileLoading(false)
 
-    // Full reload with a cache-busting param — a soft re-render left stale
-    // component state behind, and iOS is aggressive about serving old bundles.
-    window.location.replace('/?signedout=' + Date.now())
+    // Full reload: a soft re-render left stale component state behind, and the
+    // in-memory session would otherwise survive.
+    window.location.replace('/')
   }
 
   async function updateProfile(updates) {
