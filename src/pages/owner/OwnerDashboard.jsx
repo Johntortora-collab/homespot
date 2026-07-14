@@ -910,7 +910,7 @@ const EDIT_PERK_IDEAS = ['Free coffee','Free pastry','10% off','Free dessert','$
 const EDIT_EMOJIS     = ['🥐','☕','🍕','✂️','📚','🌸','💪','🎨','🛒','🐾','🔧','🏪','🍔','🍣','🧁','🌮','🍷','🎵']
 
 function SettingsPage({ spot, onSaved }) {
-  const { updateSpot, deleteSpot, saving, error } = useManageSpot()
+  const { updateSpot, deleteSpot, resetCustomerData, saving, error } = useManageSpot()
   const [f, setF] = useState({
     name:     spot.name || '',
     emoji:    spot.emoji || '🏪',
@@ -925,6 +925,19 @@ function SettingsPage({ spot, onSaved }) {
   const [confirmDel, setConfirmDel] = useState(false)
   const [delText,   setDelText]   = useState('')
   const [pausing,   setPausing]   = useState(false)
+  const [confirmReset, setConfirmReset] = useState(false)
+  const [resetText,    setResetText]    = useState('')
+  const [resetDone,    setResetDone]    = useState(null)
+
+  async function handleReset() {
+    const { data, error: err } = await resetCustomerData(spot.id)
+    if (err) return
+    setConfirmReset(false)
+    setResetText('')
+    setResetDone(data)
+    setTimeout(()=>setResetDone(null), 7000)
+    onSaved()
+  }
 
   const up = (k,v) => setF(p => ({ ...p, [k]: v }))
   const stampsChanged = parseInt(f.stamps_required) !== spot.stamps_required
@@ -1045,6 +1058,47 @@ function SettingsPage({ spot, onSaved }) {
           <button onClick={handlePause} disabled={pausing} style={{ background:spot.active?'none':C.sage, border:spot.active?`1px solid ${C.border}`:'none', borderRadius:9, padding:'9px 16px', fontSize:12.5, fontWeight:600, color:spot.active?C.mid:'#fff', cursor:'pointer', flexShrink:0 }}>
             {pausing ? '…' : spot.active ? 'Pause' : 'Go live again'}
           </button>
+        </div>
+
+        {/* Reset customer data */}
+        <div style={{ paddingBottom:15, marginBottom:15, borderBottom:'1px solid #FECACA' }}>
+          {resetDone && (
+            <div style={{ background:C.sageSoft, border:`1px solid ${C.sage}55`, borderRadius:9, padding:'10px 13px', fontSize:12.5, color:'#3D6B27', marginBottom:11, lineHeight:1.5 }}>
+              ✓ Cleared {resetDone.visits} visit{resetDone.visits===1?'':'s'}, {resetDone.stamp_cards} stamp card{resetDone.stamp_cards===1?'':'s'}, {resetDone.redemptions} perk{resetDone.redemptions===1?'':'s'}, and {resetDone.feedback} feedback note{resetDone.feedback===1?'':'s'}.
+            </div>
+          )}
+
+          <div style={{ fontSize:13.5, fontWeight:600, color:C.ink, marginBottom:3 }}>Reset customer data</div>
+          <div style={{ fontSize:12, color:C.muted, lineHeight:1.55, marginBottom:12 }}>
+            Sets every customer back to zero stamps and clears all visits, earned perks, and feedback.
+            Your listing, reward, and tap tag stay exactly as they are — <strong>nothing needs reprinting</strong>.
+            Useful for wiping test data, or starting a fresh loyalty season.
+          </div>
+
+          {!confirmReset ? (
+            <button onClick={()=>setConfirmReset(true)} style={{ background:'none', border:'1px solid #FCA5A5', borderRadius:9, padding:'9px 16px', fontSize:12.5, fontWeight:600, color:'#DC2626', cursor:'pointer' }}>
+              Reset customer data
+            </button>
+          ) : (
+            <div>
+              <div style={{ fontSize:12.5, color:'#B91C1C', marginBottom:8, lineHeight:1.5 }}>
+                This erases every customer's progress at {spot.name} and can't be undone.
+                Type <strong>RESET</strong> to confirm:
+              </div>
+              <div style={{ display:'flex', gap:8, flexWrap:'wrap' }}>
+                <input value={resetText} onChange={e=>setResetText(e.target.value)} placeholder="RESET"
+                  style={{ flex:1, minWidth:150, background:'#fff', border:'1px solid #FCA5A5', borderRadius:9, padding:'9px 12px', fontSize:13 }}/>
+                <button onClick={handleReset} disabled={resetText !== 'RESET' || saving}
+                  style={{ background: resetText==='RESET' ? '#DC2626' : '#F3D3D3', border:'none', borderRadius:9, padding:'9px 16px', fontSize:12.5, fontWeight:600, color:'#fff', cursor: resetText==='RESET' ? 'pointer' : 'default', flexShrink:0 }}>
+                  {saving ? 'Clearing…' : 'Clear it all'}
+                </button>
+                <button onClick={()=>{ setConfirmReset(false); setResetText('') }}
+                  style={{ background:'none', border:`1px solid ${C.border}`, borderRadius:9, padding:'9px 14px', fontSize:12.5, color:C.mid, cursor:'pointer', flexShrink:0 }}>
+                  Cancel
+                </button>
+              </div>
+            </div>
+          )}
         </div>
 
         <div style={{ fontSize:13.5, fontWeight:600, color:C.ink, marginBottom:3 }}>Delete this business</div>

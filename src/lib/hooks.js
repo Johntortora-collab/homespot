@@ -270,7 +270,18 @@ export function useManageSpot() {
     return { error }
   }
 
-  return { createSpot, updateSpot, deleteSpot, saving, error }
+  // Wipes every customer's stamps, visits, earned perks, and feedback for this
+  // spot — but leaves the spot itself (and its tap tag / QR) intact.
+  async function resetCustomerData(spotId) {
+    setSaving(true)
+    setError(null)
+    const { data, error } = await supabase.rpc('reset_spot_customer_data', { p_spot_id: spotId })
+    setSaving(false)
+    if (error) setError(error.message)
+    return { data, error }
+  }
+
+  return { createSpot, updateSpot, deleteSpot, resetCustomerData, saving, error }
 }
 
 // ── Owner: dashboard stats ────────────────────────────────────────────────────
