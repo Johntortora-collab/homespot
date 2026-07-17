@@ -792,3 +792,66 @@ export function useSpotRedemptions(spotId) {
 
   return { rows, pending, redeemed, loading, markRedeemed, refetch: fetchRows }
 }
+
+// ── Admin control center ──────────────────────────────────────────────────────
+export function useAdminOverview() {
+  const [stats, setStats] = useState(null)
+  const [loading, setLoading] = useState(true)
+  useEffect(() => {
+    supabase.rpc('admin_overview').then(({ data }) => { setStats(data); setLoading(false) })
+  }, [])
+  return { stats, loading }
+}
+
+export function useAdminUsers() {
+  const [users, setUsers] = useState([])
+  const [loading, setLoading] = useState(true)
+
+  const fetchUsers = useCallback(async () => {
+    setLoading(true)
+    const { data } = await supabase.rpc('admin_users')
+    setUsers(data || [])
+    setLoading(false)
+  }, [])
+
+  useEffect(() => { fetchUsers() }, [fetchUsers])
+
+  async function setRole(userId, role) {
+    const { error } = await supabase.rpc('admin_set_role', { target_id: userId, new_role: role })
+    if (!error) await fetchUsers()
+    return { error }
+  }
+
+  return { users, loading, setRole, refetch: fetchUsers }
+}
+
+export function useAdminOffers() {
+  const [offers, setOffers] = useState([])
+  const [loading, setLoading] = useState(true)
+
+  const fetchOffers = useCallback(async () => {
+    setLoading(true)
+    const { data } = await supabase.rpc('admin_offers')
+    setOffers(data || [])
+    setLoading(false)
+  }, [])
+
+  useEffect(() => { fetchOffers() }, [fetchOffers])
+
+  async function endOffer(offerId) {
+    const { error } = await supabase.rpc('admin_end_offer', { offer_id: offerId })
+    if (!error) await fetchOffers()
+    return { error }
+  }
+
+  return { offers, loading, endOffer, refetch: fetchOffers }
+}
+
+export function useAdminFeedback() {
+  const [feedback, setFeedback] = useState([])
+  const [loading, setLoading] = useState(true)
+  useEffect(() => {
+    supabase.rpc('admin_feedback').then(({ data }) => { setFeedback(data || []); setLoading(false) })
+  }, [])
+  return { feedback, loading }
+}
