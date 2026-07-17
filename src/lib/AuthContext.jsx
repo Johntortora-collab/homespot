@@ -93,12 +93,28 @@ export function AuthProvider({ children }) {
   }
 
   // Sign-out intentionally removed — to be rebuilt cleanly.
-  function signOut() {
-    // Fire, do not await. Awaiting the default (global) sign-out blocked on a
-    // network call that could hang, so the reload never ran. Fire it and
-    // reload immediately — the reload wipes all in-memory state, and Supabase
-    // clears its own stored token in the background.
-    supabase.auth.signOut()
+  async function signOut() {
+    // Google OAuth sessions are held server-side, not just in localStorage, so
+    // a purely local clear leaves the session intact and the reload just
+    // restores it. Await a GLOBAL sign-out so the server actually revokes it.
+    // The timeout guards against the call hanging (which is what made earlier
+    // attempts appear dead) — after 4s we give up waiting and reload anyway.
+    try {
+      await Promise.race([
+        supabase.auth.signOut({ scope: 'global' }),
+        new Promise((_, reject) => setTimeout(() => reject(new Error('timeout')), 4000)),
+      ])
+    } catch (err) {
+      console.error('Sign out:', err)
+    }
+
+    // Belt and braces: clear any Supabase keys that do exist locally.
+    try {
+      Object.keys(localStorage)
+        .filter(k => k.startsWith('sb-'))
+        .forEach(k => localStorage.removeItem(k))
+    } catch {}
+
     window.location.href = '/'
   }
 
