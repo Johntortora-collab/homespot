@@ -133,6 +133,14 @@ export default function OwnerDashboard() {
           </div>
         </div>
 
+        <button
+          className="ow-signout-mobile"
+          onClick={signOut}
+          style={{ background:'rgba(255,255,255,0.08)', border:'1px solid rgba(255,255,255,0.12)', borderRadius:20, padding:'7px 14px', fontSize:12, fontWeight:600, color:'rgba(255,255,255,0.75)', cursor:'pointer', flexShrink:0, fontFamily:'inherit' }}
+        >
+          Sign out
+        </button>
+
         <nav style={{ flex:1, padding:'6px 11px' }}>
           {navItems.map(item=>(
             <button key={item.id} onClick={()=>setPage(item.id)} style={{ width:'100%', display:'flex', alignItems:'center', gap:9, padding:'10px 11px', borderRadius:9, border:'none', background:page===item.id?'rgba(245,166,35,0.15)':'none', color:page===item.id?C.amber:'rgba(255,255,255,0.5)', cursor:'pointer', marginBottom:2, textAlign:'left', fontSize:13, fontWeight:page===item.id?600:400, transition:'all 0.15s' }}>
@@ -144,7 +152,7 @@ export default function OwnerDashboard() {
 
         <div className="ow-signout" style={{ padding:'14px 18px', borderTop:'1px solid rgba(255,255,255,0.07)' }}>
           <div style={{ fontSize:11, color:'rgba(255,255,255,0.35)', marginBottom:8 }}>{profile?.full_name}</div>
-          {/* sign-out button removed — to be rebuilt */}
+          <button onClick={signOut} style={{ background:'none', border:'none', fontSize:12, color:'rgba(255,255,255,0.5)', cursor:'pointer', textAlign:'left', padding:0, fontFamily:'inherit' }}>Sign out</button>
         </div>
       </aside>
 

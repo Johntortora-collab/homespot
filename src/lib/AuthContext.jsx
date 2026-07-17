@@ -94,26 +94,24 @@ export function AuthProvider({ children }) {
 
   // Sign-out intentionally removed — to be rebuilt cleanly.
   async function signOut() {
-    console.log('[signout] 1 button clicked, function entered')
-
+    // Google OAuth sessions are revoked server-side, so a global scope + await
+    // is required — a local-only clear leaves the session alive and the reload
+    // just restores it. The timeout stops a hung request from blocking forever.
     try {
-      console.log('[signout] 2 calling supabase signOut...')
-      const result = await Promise.race([
+      await Promise.race([
         supabase.auth.signOut({ scope: 'global' }),
         new Promise((_, reject) => setTimeout(() => reject(new Error('timeout')), 4000)),
       ])
-      console.log('[signout] 3 supabase returned:', result)
     } catch (err) {
-      console.error('[signout] 3 error/timeout:', err)
+      console.error('Sign out:', err)
     }
 
     try {
-      const before = Object.keys(localStorage)
-      Object.keys(localStorage).filter(k => k.startsWith('sb-')).forEach(k => localStorage.removeItem(k))
-      console.log('[signout] 4 cleared localStorage. before:', before, 'after:', Object.keys(localStorage))
-    } catch (e) { console.error('[signout] 4 storage error', e) }
+      Object.keys(localStorage)
+        .filter(k => k.startsWith('sb-'))
+        .forEach(k => localStorage.removeItem(k))
+    } catch {}
 
-    console.log('[signout] 5 about to reload')
     window.location.href = '/'
   }
 
