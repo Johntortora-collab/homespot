@@ -684,7 +684,37 @@ export function useAdminSpots() {
     return { error }
   }
 
-  return { spots, loading, deleteSpot, refetch: fetchSpots }
+  async function createSpot(f) {
+    const { error } = await supabase.rpc('admin_create_spot', {
+      p_owner_id: f.owner_id || null,
+      p_town_id: f.town_id,
+      p_name: f.name,
+      p_emoji: f.emoji,
+      p_category: f.category,
+      p_tagline: f.tagline || null,
+      p_perk: f.perk,
+      p_stamps_required: parseInt(f.stamps_required),
+    })
+    if (!error) await fetchSpots()
+    return { error }
+  }
+
+  async function updateSpot(spotId, f) {
+    const { error } = await supabase.rpc('admin_update_spot', {
+      p_spot_id: spotId,
+      p_name: f.name,
+      p_emoji: f.emoji,
+      p_category: f.category,
+      p_tagline: f.tagline || null,
+      p_perk: f.perk,
+      p_stamps_required: parseInt(f.stamps_required),
+      p_town_id: f.town_id || null,
+    })
+    if (!error) await fetchSpots()
+    return { error }
+  }
+
+  return { spots, loading, deleteSpot, createSpot, updateSpot, refetch: fetchSpots }
 }
 
 
@@ -850,8 +880,21 @@ export function useAdminOffers() {
 export function useAdminFeedback() {
   const [feedback, setFeedback] = useState([])
   const [loading, setLoading] = useState(true)
-  useEffect(() => {
-    supabase.rpc('admin_feedback').then(({ data }) => { setFeedback(data || []); setLoading(false) })
+
+  const fetchFeedback = useCallback(async () => {
+    setLoading(true)
+    const { data } = await supabase.rpc('admin_feedback')
+    setFeedback(data || [])
+    setLoading(false)
   }, [])
-  return { feedback, loading }
+
+  useEffect(() => { fetchFeedback() }, [fetchFeedback])
+
+  async function respond(feedbackId, text) {
+    const { error } = await supabase.rpc('admin_respond_feedback', { p_feedback_id: feedbackId, p_response: text })
+    if (!error) await fetchFeedback()
+    return { error }
+  }
+
+  return { feedback, loading, respond, refetch: fetchFeedback }
 }
