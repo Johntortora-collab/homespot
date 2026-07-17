@@ -228,7 +228,7 @@ export default function ConsumerApp() {
           <div className="hs-statusbar" style={{ height:44, background:C.bg, display:'flex', alignItems:'center', justifyContent:'space-between', padding:'0 20px', flexShrink:0 }}>
             <span style={{ fontSize:11, color:'#fff', opacity:0.5 }}>9:41</span>
             <Logo size={18}/>
-            <span onClick={signOut} style={{ fontSize:11, color:C.amber, cursor:'pointer', fontWeight:600 }}>Sign out</span>
+            {/* sign-out removed — to be rebuilt */}
           </div>
         )}
 
@@ -1276,10 +1276,7 @@ function Profile({ onSwitch, onNav }) {
             <span style={{ color:'#444', fontSize:13, marginLeft:'auto' }}>›</span>
           </div>
         ))}
-        <div onClick={signOut} style={{ background:C.card, border:`1px solid ${C.border}`, borderRadius:12, padding:'13px 15px', display:'flex', alignItems:'center', gap:12, cursor:'pointer' }}>
-          <div style={{ width:34, height:34, borderRadius:9, background:C.card2, display:'flex', alignItems:'center', justifyContent:'center', fontSize:16 }}>🚪</div>
-          <span style={{ fontSize:14, color:'#fff', fontWeight:500 }}>Sign out</span>
-        </div>
+        {/* sign-out removed — to be rebuilt */}
       </div>
     </div>
   )

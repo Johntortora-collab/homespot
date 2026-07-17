@@ -142,17 +142,9 @@ export default function OwnerDashboard() {
           ))}
         </nav>
 
-        <button
-          className="ow-signout-mobile"
-          onClick={signOut}
-          style={{ background:'rgba(255,255,255,0.08)', border:'1px solid rgba(255,255,255,0.12)', borderRadius:20, padding:'7px 14px', fontSize:12, fontWeight:600, color:'rgba(255,255,255,0.75)', cursor:'pointer', flexShrink:0 }}
-        >
-          Sign out
-        </button>
-
         <div className="ow-signout" style={{ padding:'14px 18px', borderTop:'1px solid rgba(255,255,255,0.07)' }}>
           <div style={{ fontSize:11, color:'rgba(255,255,255,0.35)', marginBottom:8 }}>{profile?.full_name}</div>
-          <button onClick={signOut} style={{ background:'none', border:'none', fontSize:12, color:'rgba(255,255,255,0.4)', cursor:'pointer', textAlign:'left', padding:0 }}>Sign out</button>
+          {/* sign-out button removed — to be rebuilt */}
         </div>
       </aside>
 
