@@ -94,7 +94,12 @@ export function AuthProvider({ children }) {
 
   // Sign-out intentionally removed — to be rebuilt cleanly.
   function signOut() {
-    console.warn('signOut not implemented yet')
+    // Fire, do not await. Awaiting the default (global) sign-out blocked on a
+    // network call that could hang, so the reload never ran. Fire it and
+    // reload immediately — the reload wipes all in-memory state, and Supabase
+    // clears its own stored token in the background.
+    supabase.auth.signOut()
+    window.location.href = '/'
   }
 
   async function updateProfile(updates) {

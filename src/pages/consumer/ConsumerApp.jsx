@@ -1276,7 +1276,13 @@ function Profile({ onSwitch, onNav }) {
             <span style={{ color:'#444', fontSize:13, marginLeft:'auto' }}>›</span>
           </div>
         ))}
-        {/* sign-out removed — to be rebuilt */}
+        <button
+          onClick={signOut}
+          style={{ width:'100%', background:C.card, border:`1px solid ${C.border}`, borderRadius:12, padding:'13px 15px', marginTop:8, display:'flex', alignItems:'center', gap:12, cursor:'pointer', fontFamily:'inherit', textAlign:'left' }}
+        >
+          <span style={{ width:34, height:34, borderRadius:9, background:C.card2, display:'flex', alignItems:'center', justifyContent:'center', fontSize:16 }}>🚪</span>
+          <span style={{ fontSize:14, color:'#fff', fontWeight:500 }}>Sign out</span>
+        </button>
       </div>
     </div>
   )
