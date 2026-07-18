@@ -408,6 +408,25 @@ function SignupScreen({ town, authMode, setAuthMode, onSignup, onSignIn, onBack 
   const [loading,  setLoading]  = useState(false)
   const [error,    setError]    = useState('')
   const [awaitingConfirm, setAwaitingConfirm] = useState(false)
+  const [resetSent, setResetSent] = useState(false)
+  const [resetBusy, setResetBusy] = useState(false)
+
+  // Sends a Supabase recovery email. The link inside it lands on /reset-password,
+  // which is registered in App.jsx above the role checks.
+  async function handleForgotPassword() {
+    setError('')
+    if (!email.includes('@')) {
+      setError('Enter your email address above first, then tap this again.')
+      return
+    }
+    setResetBusy(true)
+    const { error: err } = await supabase.auth.resetPasswordForEmail(email.trim(), {
+      redirectTo: `${window.location.origin}/reset-password`,
+    })
+    setResetBusy(false)
+    if (err) { setError(err.message); return }
+    setResetSent(true)
+  }
 
   async function handleSubmit() {
     setError('')
@@ -435,6 +454,25 @@ function SignupScreen({ town, authMode, setAuthMode, onSignup, onSignIn, onBack 
   const ready = authMode === 'signup'
     ? name.trim() && email.includes('@') && password.length >= 6
     : email.includes('@') && password.length >= 6
+
+  if (resetSent) return (
+    <div style={{ height:'100%', overflowY:'auto', background:C.bg, display:'flex', alignItems:'center', justifyContent:'center', padding:'0 24px' }}>
+      <div style={{ textAlign:'center', maxWidth:300, animation:'up 0.4s ease' }}>
+        <div style={{ fontSize:48, marginBottom:18 }}>🔑</div>
+        <h2 style={{ fontFamily:'Fraunces,serif', fontSize:22, color:'#fff', fontWeight:700, marginBottom:10 }}>Check your email</h2>
+        <p style={{ fontSize:13, color:'#888', lineHeight:1.6, marginBottom:6 }}>
+          If an account exists for
+        </p>
+        <p style={{ fontSize:14, color:C.amber, fontWeight:600, marginBottom:18 }}>{email}</p>
+        <p style={{ fontSize:13, color:'#666', lineHeight:1.6, marginBottom:24 }}>
+          we've sent a link to reset your password. It expires shortly, so use it soon.
+        </p>
+        <button onClick={()=>{ setResetSent(false); setPassword('') }} style={{ background:C.amber, border:'none', borderRadius:13, padding:'12px 28px', fontSize:14, fontWeight:600, color:C.bg, cursor:'pointer' }}>
+          Back to sign in
+        </button>
+      </div>
+    </div>
+  )
 
   if (awaitingConfirm) return (
     <div style={{ height:'100%', overflowY:'auto', background:C.bg, display:'flex', alignItems:'center', justifyContent:'center', padding:'0 24px' }}>
@@ -507,6 +545,12 @@ function SignupScreen({ town, authMode, setAuthMode, onSignup, onSignIn, onBack 
         <div style={{ display:'flex', flexDirection:'column', gap:5 }}>
           <label style={{ fontSize:12, color:'#888' }}>Password</label>
           <input type="password" value={password} onChange={e=>setPassword(e.target.value)} placeholder={authMode==='signup'?'At least 6 characters':'••••••••'} style={{ background:C.card, border:`1px solid ${C.border}`, borderRadius:11, padding:'12px 14px', fontSize:14, color:'#fff', width:'100%' }}/>
+          {authMode === 'signin' && (
+            <button onClick={handleForgotPassword} disabled={resetBusy}
+              style={{ alignSelf:'flex-end', background:'none', border:'none', padding:'4px 0 0', fontSize:12, color:'#888', textDecoration:'underline', cursor:resetBusy?'default':'pointer' }}>
+              {resetBusy ? 'Sending…' : 'Forgot password?'}
+            </button>
+          )}
         </div>
 
         {error && (

@@ -13,6 +13,9 @@ import OwnerDashboard  from './pages/owner/OwnerDashboard'
 import Terms   from './pages/Terms'
 import Privacy from './pages/Privacy'
 
+// Password recovery
+import ResetPassword from './pages/ResetPassword'
+
 // Admin
 import AdminTowns from './pages/AdminTowns'
 
@@ -21,11 +24,17 @@ function Router() {
 
   if (loading) return <Loader />
 
-  // Legal pages are always reachable regardless of auth state
+  // Always reachable regardless of auth state.
+  //
+  // /reset-password MUST live here rather than inside one of the role branches
+  // below. A Supabase recovery link creates a real session before this component
+  // renders, so if the route sat under the role checks the user would be routed
+  // straight to their dashboard and never get to set a new password.
   const legalRoutes = (
     <>
-      <Route path="/terms"   element={<Terms />} />
-      <Route path="/privacy" element={<Privacy />} />
+      <Route path="/terms"          element={<Terms />} />
+      <Route path="/privacy"        element={<Privacy />} />
+      <Route path="/reset-password" element={<ResetPassword />} />
     </>
   )
 
