@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useMemo } from 'react'
 import { useAuth } from '../lib/AuthContext'
 import { useAdminTowns, useAdminSpots, useIsAdmin, useAdminOverview, useAdminUsers, useAdminOffers, useAdminFeedback } from '../lib/hooks'
 
@@ -16,7 +16,6 @@ const EMOJI_OPTIONS = ['📍','🏘️','🌳','🌸','🍁','🌿','⛰️','�
 export default function AdminTowns() {
   const { profile } = useAuth()
   const isAdmin = useIsAdmin()
-  const [tab, setTab] = useState('overview')
 
   if (!profile) return null
   if (!isAdmin) return (
@@ -26,6 +25,19 @@ export default function AdminTowns() {
         <div style={{ fontFamily:'Fraunces,serif', fontSize:20, color:C.ink }}>Admin access only</div>
       </div>
     </div>
+  )
+
+  return <AdminShell profile={profile} />
+}
+
+// Hooks that hit admin-only tables live here, below the isAdmin guard,
+// so a non-admin landing on /admin never fires them.
+function AdminShell({ profile }) {
+  const [tab, setTab] = useState('overview')
+  const fb = useAdminFeedback()
+  const unreplied = useMemo(
+    () => (fb.feedback || []).filter(f => !f.response).length,
+    [fb.feedback]
   )
 
   return (
@@ -49,8 +61,11 @@ export default function AdminTowns() {
       <div style={{ maxWidth:880, margin:'0 auto', padding:'24px 24px 0' }}>
         <div style={{ display:'flex', gap:8, flexWrap:'wrap' }}>
           {[['overview','Overview'],['users','Users'],['towns','Towns'],['businesses','Businesses'],['offers','Offers'],['feedback','Feedback']].map(([id, label]) => (
-            <button key={id} onClick={()=>setTab(id)} style={{ background: tab===id ? C.navy : C.card, color: tab===id ? '#fff' : C.mid, border: tab===id ? 'none' : `1px solid ${C.border}`, borderRadius:20, padding:'8px 18px', fontSize:13, fontWeight:600 }}>
+            <button key={id} onClick={()=>setTab(id)} style={{ background: tab===id ? C.navy : C.card, color: tab===id ? '#fff' : C.mid, border: tab===id ? 'none' : `1px solid ${C.border}`, borderRadius:20, padding:'8px 18px', fontSize:13, fontWeight:600, display:'flex', alignItems:'center', gap:7 }}>
               {label}
+              {id === 'feedback' && unreplied > 0 && (
+                <span style={{ background:C.rose, color:'#fff', borderRadius:9, minWidth:18, height:18, padding:'0 5px', fontSize:11, fontWeight:700, display:'inline-flex', alignItems:'center', justifyContent:'center' }}>{unreplied}</span>
+              )}
             </button>
           ))}
         </div>
@@ -61,7 +76,7 @@ export default function AdminTowns() {
       {tab === 'towns'      && <TownsPanel />}
       {tab === 'businesses' && <BusinessesPanel />}
       {tab === 'offers'     && <OffersPanel />}
-      {tab === 'feedback'   && <FeedbackPanel />}
+      {tab === 'feedback'   && <FeedbackPanel {...fb} unreplied={unreplied} />}
     </div>
   )
 }
@@ -447,12 +462,41 @@ function OffersPanel() {
 }
 
 // ── FEEDBACK ──────────────────────────────────────────────────────────────────
-function FeedbackPanel() {
-  const { feedback, loading, respond } = useAdminFeedback()
-  const moods = ['', '😞', '😐', '🙂', '😍']  // mood is 1–4
+function FeedbackPanel({ feedback, loading, respond, unreplied }) {
+  const MOODS = ['', '😞', '😐', '🙂', '😍']  // mood is 1–4
+  const MOOD_LABEL = ['', 'Unhappy', 'Meh', 'Good', 'Loved it']
+
   const [replyingTo, setReplyingTo] = useState(null)
   const [text, setText] = useState('')
   const [saving, setSaving] = useState(false)
+
+  const [status, setStatus] = useState('all')      // all | unreplied | replied
+  const [mood, setMood]     = useState('all')      // all | 1..4
+  const [spot, setSpot]     = useState('all')      // all | spot_name
+  const [sort, setSort]     = useState('newest')   // newest | oldest | worst
+
+  const rows = feedback || []
+
+  const spots = useMemo(
+    () => [...new Set(rows.map(f => f.spot_name).filter(Boolean))].sort(),
+    [rows]
+  )
+
+  const visible = useMemo(() => {
+    let out = rows.filter(f => {
+      if (status === 'unreplied' && f.response) return false
+      if (status === 'replied'   && !f.response) return false
+      if (mood !== 'all' && Number(f.mood) !== Number(mood)) return false
+      if (spot !== 'all' && f.spot_name !== spot) return false
+      return true
+    })
+    out = [...out].sort((a, b) => {
+      if (sort === 'oldest') return new Date(a.created_at) - new Date(b.created_at)
+      if (sort === 'worst')  return (a.mood ?? 9) - (b.mood ?? 9) || new Date(b.created_at) - new Date(a.created_at)
+      return new Date(b.created_at) - new Date(a.created_at)
+    })
+    return out
+  }, [rows, status, mood, spot, sort])
 
   async function send(id) {
     if (!text.trim()) return
@@ -461,48 +505,117 @@ function FeedbackPanel() {
     setSaving(false); setReplyingTo(null); setText('')
   }
 
+  const selectStyle = {
+    background:C.card, border:`1px solid ${C.border}`, borderRadius:9,
+    padding:'7px 10px', fontSize:12.5, color:C.ink, cursor:'pointer',
+  }
+
+  function when(iso) {
+    if (!iso) return ''
+    const d = new Date(iso)
+    const days = Math.floor((Date.now() - d) / 86400000)
+    if (days === 0) return 'Today'
+    if (days === 1) return 'Yesterday'
+    if (days < 7)   return `${days}d ago`
+    return d.toLocaleDateString()
+  }
+
   return (
     <div style={{ maxWidth:880, margin:'0 auto', padding:'32px 24px 60px' }}>
-      <h1 style={{ fontFamily:'Fraunces,serif', fontSize:28, fontWeight:700, marginBottom:6 }}>Feedback</h1>
-      <p style={{ fontSize:14, color:C.muted, marginBottom:20 }}>What customers have said across every business. Reply to any of them.</p>
+      <div style={{ display:'flex', alignItems:'baseline', gap:12, flexWrap:'wrap', marginBottom:6 }}>
+        <h1 style={{ fontFamily:'Fraunces,serif', fontSize:28, fontWeight:700 }}>Feedback</h1>
+        {unreplied > 0 && (
+          <button
+            onClick={()=>setStatus(status === 'unreplied' ? 'all' : 'unreplied')}
+            style={{ background: status==='unreplied' ? C.rose : 'rgba(232,149,109,0.14)', color: status==='unreplied' ? '#fff' : C.rose, border:'none', borderRadius:20, padding:'5px 13px', fontSize:12, fontWeight:700 }}>
+            {unreplied} awaiting reply
+          </button>
+        )}
+      </div>
+      <p style={{ fontSize:14, color:C.muted, marginBottom:16 }}>What customers have said across every business. Reply to any of them.</p>
 
-      {loading ? <div style={{ color:C.muted }}>Loading…</div> : feedback.length === 0 ? (
+      <div style={{ display:'flex', gap:8, flexWrap:'wrap', marginBottom:16 }}>
+        <select value={status} onChange={e=>setStatus(e.target.value)} style={selectStyle}>
+          <option value="all">All feedback</option>
+          <option value="unreplied">Needs a reply</option>
+          <option value="replied">Replied</option>
+        </select>
+        <select value={mood} onChange={e=>setMood(e.target.value)} style={selectStyle}>
+          <option value="all">Any mood</option>
+          {[1,2,3,4].map(m => <option key={m} value={m}>{MOODS[m]} {MOOD_LABEL[m]}</option>)}
+        </select>
+        <select value={spot} onChange={e=>setSpot(e.target.value)} style={selectStyle}>
+          <option value="all">All businesses</option>
+          {spots.map(sn => <option key={sn} value={sn}>{sn}</option>)}
+        </select>
+        <select value={sort} onChange={e=>setSort(e.target.value)} style={selectStyle}>
+          <option value="newest">Newest first</option>
+          <option value="oldest">Oldest first</option>
+          <option value="worst">Unhappiest first</option>
+        </select>
+        {(status!=='all'||mood!=='all'||spot!=='all'||sort!=='newest') && (
+          <button onClick={()=>{ setStatus('all'); setMood('all'); setSpot('all'); setSort('newest') }}
+            style={{ background:'none', border:'none', color:C.mid, fontSize:12.5, textDecoration:'underline', padding:'7px 4px' }}>
+            Clear
+          </button>
+        )}
+      </div>
+
+      {loading ? <div style={{ color:C.muted }}>Loading…</div> : rows.length === 0 ? (
         <div style={{ background:C.card, border:`1px solid ${C.border}`, borderRadius:15, padding:'40px', textAlign:'center', color:C.muted }}>No feedback yet.</div>
+      ) : visible.length === 0 ? (
+        <div style={{ background:C.card, border:`1px solid ${C.border}`, borderRadius:15, padding:'40px', textAlign:'center', color:C.muted }}>Nothing matches those filters.</div>
       ) : (
-        <div style={{ display:'flex', flexDirection:'column', gap:8 }}>
-          {feedback.map(f => (
-            <div key={f.id} style={{ background:C.card, border:`1px solid ${C.border}`, borderRadius:13, padding:'14px 16px' }}>
-              <div style={{ display:'flex', gap:12, alignItems:'flex-start' }}>
-                <span style={{ fontSize:22, flexShrink:0 }}>{moods[f.mood] || '•'}</span>
-                <div style={{ flex:1 }}>
-                  {f.note && <div style={{ fontSize:13.5, color:C.ink, marginBottom:3 }}>{f.note}</div>}
-                  <div style={{ fontSize:12, color:C.muted }}>{f.spot_name} · {new Date(f.created_at).toLocaleDateString()}</div>
+        <>
+          <div style={{ fontSize:12, color:C.muted, marginBottom:8 }}>
+            Showing {visible.length} of {rows.length}
+          </div>
+          <div style={{ display:'flex', flexDirection:'column', gap:8 }}>
+            {visible.map(f => {
+              const needsReply = !f.response
+              return (
+              <div key={f.id} style={{
+                background:C.card,
+                border:`1px solid ${needsReply ? 'rgba(232,149,109,0.45)' : C.border}`,
+                borderLeft: needsReply ? `3px solid ${C.rose}` : `1px solid ${C.border}`,
+                borderRadius:13, padding:'14px 16px'
+              }}>
+                <div style={{ display:'flex', gap:12, alignItems:'flex-start' }}>
+                  <span style={{ fontSize:22, flexShrink:0 }} title={MOOD_LABEL[f.mood] || ''}>{MOODS[f.mood] || '•'}</span>
+                  <div style={{ flex:1, minWidth:0 }}>
+                    {f.note
+                      ? <div style={{ fontSize:13.5, color:C.ink, marginBottom:3, whiteSpace:'pre-wrap' }}>{f.note}</div>
+                      : <div style={{ fontSize:13.5, color:C.muted, fontStyle:'italic', marginBottom:3 }}>Rating only — no comment</div>}
+                    <div style={{ fontSize:12, color:C.muted }}>{f.spot_name} · {when(f.created_at)}</div>
+                  </div>
+                  {needsReply && replyingTo !== f.id && (
+                    <button onClick={()=>{ setReplyingTo(f.id); setText('') }} style={{ background:'none', border:`1px solid ${C.border}`, borderRadius:9, padding:'6px 13px', fontSize:12, fontWeight:600, color:C.navy, cursor:'pointer', flexShrink:0 }}>Reply</button>
+                  )}
                 </div>
-                {!f.response && replyingTo !== f.id && (
-                  <button onClick={()=>{ setReplyingTo(f.id); setText('') }} style={{ background:'none', border:`1px solid ${C.border}`, borderRadius:9, padding:'6px 13px', fontSize:12, fontWeight:600, color:C.navy, cursor:'pointer', flexShrink:0 }}>Reply</button>
+
+                {f.response && (
+                  <div style={{ marginTop:10, marginLeft:34, background:C.amberSoft, border:`1px solid ${C.amberBrd}`, borderRadius:10, padding:'10px 13px' }}>
+                    <div style={{ fontSize:10, fontWeight:700, color:C.amber, letterSpacing:'0.06em', textTransform:'uppercase', marginBottom:3 }}>
+                      Your reply{f.responded_at ? ` · ${when(f.responded_at)}` : ''}
+                    </div>
+                    <div style={{ fontSize:13, color:C.ink, whiteSpace:'pre-wrap' }}>{f.response}</div>
+                  </div>
+                )}
+
+                {replyingTo === f.id && (
+                  <div style={{ marginTop:10, marginLeft:34 }}>
+                    <textarea value={text} onChange={e=>setText(e.target.value)} placeholder="Write a reply…" autoFocus
+                      style={{ width:'100%', background:C.bg, border:`1px solid ${C.border}`, borderRadius:10, padding:'10px 13px', fontSize:13.5, color:C.ink, resize:'vertical', minHeight:64, fontFamily:'inherit' }}/>
+                    <div style={{ display:'flex', gap:8, marginTop:8 }}>
+                      <button onClick={()=>send(f.id)} disabled={!text.trim()||saving} style={{ background:text.trim()&&!saving?C.amber:'#E8E3DC', border:'none', borderRadius:9, padding:'8px 16px', fontSize:12.5, fontWeight:600, color:text.trim()&&!saving?C.navy:C.muted, cursor:text.trim()&&!saving?'pointer':'default' }}>{saving?'Sending…':'Send reply'}</button>
+                      <button onClick={()=>{ setReplyingTo(null); setText('') }} style={{ background:'none', border:`1px solid ${C.border}`, borderRadius:9, padding:'8px 14px', fontSize:12.5, color:C.mid, cursor:'pointer' }}>Cancel</button>
+                    </div>
+                  </div>
                 )}
               </div>
-
-              {f.response && (
-                <div style={{ marginTop:10, marginLeft:34, background:C.amberSoft, border:`1px solid ${C.amberBrd}`, borderRadius:10, padding:'10px 13px' }}>
-                  <div style={{ fontSize:10, fontWeight:700, color:C.amber, letterSpacing:'0.06em', textTransform:'uppercase', marginBottom:3 }}>Your reply</div>
-                  <div style={{ fontSize:13, color:C.ink }}>{f.response}</div>
-                </div>
-              )}
-
-              {replyingTo === f.id && (
-                <div style={{ marginTop:10, marginLeft:34 }}>
-                  <textarea value={text} onChange={e=>setText(e.target.value)} placeholder="Write a reply…" autoFocus
-                    style={{ width:'100%', background:C.bg, border:`1px solid ${C.border}`, borderRadius:10, padding:'10px 13px', fontSize:13.5, color:C.ink, resize:'vertical', minHeight:64, fontFamily:'inherit' }}/>
-                  <div style={{ display:'flex', gap:8, marginTop:8 }}>
-                    <button onClick={()=>send(f.id)} disabled={!text.trim()||saving} style={{ background:text.trim()&&!saving?C.amber:'#E8E3DC', border:'none', borderRadius:9, padding:'8px 16px', fontSize:12.5, fontWeight:600, color:text.trim()&&!saving?C.navy:C.muted, cursor:text.trim()&&!saving?'pointer':'default' }}>{saving?'Sending…':'Send reply'}</button>
-                    <button onClick={()=>{ setReplyingTo(null); setText('') }} style={{ background:'none', border:`1px solid ${C.border}`, borderRadius:9, padding:'8px 14px', fontSize:12.5, color:C.mid, cursor:'pointer' }}>Cancel</button>
-                  </div>
-                </div>
-              )}
-            </div>
-          ))}
-        </div>
+            )})}
+          </div>
+        </>
       )}
     </div>
   )
