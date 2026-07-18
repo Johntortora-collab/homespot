@@ -678,12 +678,37 @@ function UsersPanel() {
   const { users, loading, setRole } = useAdminUsers()
   const [q, setQ] = useState('')
   const [busyId, setBusyId] = useState(null)
+  const [role, setRoleFilter] = useState('all')   // all | consumer | owner | admin
+  const [sort, setSort] = useState('newest')      // newest | oldest | name | scans
 
-  const filtered = users.filter(u =>
-    (u.full_name || '').toLowerCase().includes(q.toLowerCase()) ||
-    (u.email || '').toLowerCase().includes(q.toLowerCase()) ||
-    (u.town_name || '').toLowerCase().includes(q.toLowerCase())
-  )
+  const rows = users || []
+
+  const counts = useMemo(() => ({
+    all: rows.length,
+    consumer: rows.filter(u => u.role === 'consumer').length,
+    owner: rows.filter(u => u.role === 'owner').length,
+    admin: rows.filter(u => u.is_admin).length,
+  }), [rows])
+
+  const filtered = useMemo(() => {
+    const needle = q.trim().toLowerCase()
+    let out = rows.filter(u => {
+      if (role === 'admin' && !u.is_admin) return false
+      if (role === 'owner' && u.role !== 'owner') return false
+      if (role === 'consumer' && u.role !== 'consumer') return false
+      if (!needle) return true
+      return (u.full_name || '').toLowerCase().includes(needle)
+        || (u.email || '').toLowerCase().includes(needle)
+        || (u.town_name || '').toLowerCase().includes(needle)
+    })
+    out = [...out].sort((a, b) => {
+      if (sort === 'oldest') return new Date(a.created_at) - new Date(b.created_at)
+      if (sort === 'name')   return (a.full_name || a.email || '').localeCompare(b.full_name || b.email || '')
+      if (sort === 'scans')  return (b.visit_count || 0) - (a.visit_count || 0)
+      return new Date(b.created_at) - new Date(a.created_at)
+    })
+    return out
+  }, [rows, q, role, sort])
 
   async function toggleRole(u) {
     setBusyId(u.id)
@@ -691,39 +716,82 @@ function UsersPanel() {
     setBusyId(null)
   }
 
+  const TABS = [
+    ['all', 'Everyone'],
+    ['consumer', 'Customers'],
+    ['owner', 'Owners'],
+    ['admin', 'Admins'],
+  ]
+
   return (
     <div style={{ maxWidth:880, margin:'0 auto', padding:'32px 24px 60px' }}>
-      <h1 style={{ fontFamily:'Fraunces,serif', fontSize:28, fontWeight:700, marginBottom:6 }}>Users ({users.length})</h1>
-      <p style={{ fontSize:14, color:C.muted, marginBottom:20 }}>Everyone who's signed up. Switch someone between customer and business owner here.</p>
+      <h1 style={{ fontFamily:'Fraunces,serif', fontSize:28, fontWeight:700, marginBottom:6 }}>Users ({rows.length})</h1>
+      <p style={{ fontSize:14, color:C.muted, marginBottom:16 }}>Everyone who's signed up. Switch someone between customer and business owner here.</p>
 
-      <input value={q} onChange={e=>setQ(e.target.value)} placeholder="Search name, email, or town…"
-        style={{ width:'100%', background:C.card, border:`1px solid ${C.border}`, borderRadius:12, padding:'11px 14px', fontSize:14, marginBottom:18 }}/>
+      <div style={{ display:'flex', gap:7, flexWrap:'wrap', marginBottom:12 }}>
+        {TABS.map(([id, label]) => {
+          const on = role === id
+          return (
+            <button key={id} onClick={()=>setRoleFilter(id)} style={{
+              background: on ? C.navy : C.card,
+              color: on ? '#fff' : C.mid,
+              border: on ? 'none' : `1px solid ${C.border}`,
+              borderRadius:20, padding:'7px 15px', fontSize:12.5, fontWeight:600,
+              display:'inline-flex', alignItems:'center', gap:7,
+            }}>
+              {label}
+              <span style={{
+                background: on ? 'rgba(255,255,255,0.18)' : C.bg,
+                color: on ? '#fff' : C.muted,
+                borderRadius:9, padding:'1px 7px', fontSize:11, fontWeight:700,
+              }}>{counts[id]}</span>
+            </button>
+          )
+        })}
+      </div>
+
+      <div style={{ display:'flex', gap:8, flexWrap:'wrap', marginBottom:18 }}>
+        <input value={q} onChange={e=>setQ(e.target.value)} placeholder="Search name, email, or town…"
+          style={{ flex:1, minWidth:200, background:C.card, border:`1px solid ${C.border}`, borderRadius:12, padding:'11px 14px', fontSize:14 }}/>
+        <select value={sort} onChange={e=>setSort(e.target.value)}
+          style={{ background:C.card, border:`1px solid ${C.border}`, borderRadius:12, padding:'11px 12px', fontSize:12.5, color:C.ink, cursor:'pointer' }}>
+          <option value="newest">Newest first</option>
+          <option value="oldest">Oldest first</option>
+          <option value="name">Name A–Z</option>
+          <option value="scans">Most scans</option>
+        </select>
+      </div>
 
       {loading ? <div style={{ color:C.muted }}>Loading…</div> : (
-        <div style={{ background:C.card, border:`1px solid ${C.border}`, borderRadius:15, overflow:'hidden' }}>
-          {filtered.map((u, i) => (
-            <div key={u.id} style={{ display:'flex', alignItems:'center', gap:12, padding:'13px 16px', borderBottom: i<filtered.length-1 ? `1px solid ${C.border}` : 'none', flexWrap:'wrap' }}>
-              <div style={{ flex:1, minWidth:180 }}>
-                <div style={{ fontSize:13.5, fontWeight:600 }}>
-                  {u.full_name || u.email || 'Unnamed'}
-                  {u.is_admin && <span style={{ marginLeft:7, fontSize:10, fontWeight:700, color:C.amber, background:C.amberSoft, borderRadius:20, padding:'1px 7px' }}>ADMIN</span>}
+        <>
+          <div style={{ fontSize:12, color:C.muted, marginBottom:8 }}>
+            Showing {filtered.length} of {rows.length}
+          </div>
+          <div style={{ background:C.card, border:`1px solid ${C.border}`, borderRadius:15, overflow:'hidden' }}>
+            {filtered.map((u, i) => (
+              <div key={u.id} style={{ display:'flex', alignItems:'center', gap:12, padding:'13px 16px', borderBottom: i<filtered.length-1 ? `1px solid ${C.border}` : 'none', flexWrap:'wrap' }}>
+                <div style={{ flex:1, minWidth:180 }}>
+                  <div style={{ fontSize:13.5, fontWeight:600 }}>
+                    {u.full_name || u.email || 'Unnamed'}
+                    {u.is_admin && <span style={{ marginLeft:7, fontSize:10, fontWeight:700, color:C.amber, background:C.amberSoft, borderRadius:20, padding:'1px 7px' }}>ADMIN</span>}
+                  </div>
+                  <div style={{ fontSize:12, color:C.muted }}>
+                    {u.email && `${u.email} · `}{u.town_name || 'no town'} · {u.visit_count} scan{u.visit_count===1?'':'s'} · joined {new Date(u.created_at).toLocaleDateString()}
+                  </div>
                 </div>
-                <div style={{ fontSize:12, color:C.muted }}>
-                  {u.email && `${u.email} · `}{u.town_name || 'no town'} · {u.visit_count} scan{u.visit_count===1?'':'s'} · joined {new Date(u.created_at).toLocaleDateString()}
-                </div>
+                <span style={{ fontSize:11, fontWeight:700, borderRadius:20, padding:'3px 10px', color: u.role==='owner' ? '#8A6A00' : C.mid, background: u.role==='owner' ? C.amberSoft : C.bg, border:`1px solid ${u.role==='owner'?C.amberBrd:C.border}` }}>
+                  {u.role === 'owner' ? 'owner' : 'customer'}
+                </span>
+                <button onClick={()=>toggleRole(u)} disabled={busyId===u.id || u.is_admin}
+                  title={u.is_admin ? "Can't change an admin's role here" : ''}
+                  style={{ background:'none', border:`1px solid ${C.border}`, borderRadius:9, padding:'7px 12px', fontSize:12, fontWeight:600, color: u.is_admin ? C.muted : C.navy, cursor: u.is_admin ? 'default' : 'pointer', flexShrink:0 }}>
+                  {busyId===u.id ? '…' : u.role==='owner' ? 'Make customer' : 'Make owner'}
+                </button>
               </div>
-              <span style={{ fontSize:11, fontWeight:700, borderRadius:20, padding:'3px 10px', color: u.role==='owner' ? '#8A6A00' : C.mid, background: u.role==='owner' ? C.amberSoft : C.bg, border:`1px solid ${u.role==='owner'?C.amberBrd:C.border}` }}>
-                {u.role}
-              </span>
-              <button onClick={()=>toggleRole(u)} disabled={busyId===u.id || u.is_admin}
-                title={u.is_admin ? "Can't change an admin's role here" : ''}
-                style={{ background:'none', border:`1px solid ${C.border}`, borderRadius:9, padding:'7px 12px', fontSize:12, fontWeight:600, color: u.is_admin ? C.muted : C.navy, cursor: u.is_admin ? 'default' : 'pointer', flexShrink:0 }}>
-                {busyId===u.id ? '…' : u.role==='owner' ? 'Make customer' : 'Make owner'}
-              </button>
-            </div>
-          ))}
-          {filtered.length === 0 && <div style={{ padding:'30px', textAlign:'center', color:C.muted, fontSize:14 }}>No matches.</div>}
-        </div>
+            ))}
+            {filtered.length === 0 && <div style={{ padding:'30px', textAlign:'center', color:C.muted, fontSize:14 }}>No matches.</div>}
+          </div>
+        </>
       )}
     </div>
   )
