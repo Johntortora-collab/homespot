@@ -507,3 +507,111 @@ function FeedbackPanel() {
     </div>
   )
 }
+
+// ── OVERVIEW ──────────────────────────────────────────────────────────────────
+function OverviewPanel() {
+  const { stats, loading } = useAdminOverview()
+
+  if (loading) return <div style={{ maxWidth:880, margin:'0 auto', padding:'32px 24px', color:C.muted }}>Loading…</div>
+  if (!stats)  return <div style={{ maxWidth:880, margin:'0 auto', padding:'32px 24px', color:C.rose }}>Couldn't load stats.</div>
+
+  const cards = [
+    ['People', [
+      ['Total users', stats.total_users],
+      ['Customers', stats.consumers],
+      ['Owners', stats.owners],
+    ]],
+    ['Places', [
+      ['Active towns', stats.towns_active],
+      ['Businesses', stats.businesses],
+      ['Live now', stats.businesses_live],
+    ]],
+    ['Activity', [
+      ['Total scans', stats.scans_total],
+      ['Scans (7 days)', stats.scans_7d],
+      ['Live offers', stats.offers_live],
+    ]],
+    ['Perks', [
+      ['Earned', stats.perks_earned],
+      ['Redeemed', stats.perks_redeemed],
+      ['Town requests', stats.town_requests],
+    ]],
+  ]
+
+  return (
+    <div style={{ maxWidth:880, margin:'0 auto', padding:'32px 24px 60px' }}>
+      <h1 style={{ fontFamily:'Fraunces,serif', fontSize:28, fontWeight:700, marginBottom:6 }}>Pilot Overview</h1>
+      <p style={{ fontSize:14, color:C.muted, marginBottom:28 }}>Everything happening across Homespot at a glance.</p>
+
+      <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fit,minmax(200px,1fr))', gap:14 }}>
+        {cards.map(([group, rows]) => (
+          <div key={group} style={{ background:C.card, border:`1px solid ${C.border}`, borderRadius:15, padding:'18px 20px' }}>
+            <div style={{ fontSize:11, fontWeight:700, color:C.amber, letterSpacing:'0.08em', textTransform:'uppercase', marginBottom:13 }}>{group}</div>
+            {rows.map(([label, value], i) => (
+              <div key={label} style={{ display:'flex', justifyContent:'space-between', alignItems:'baseline', marginBottom: i < rows.length-1 ? 9 : 0 }}>
+                <span style={{ fontSize:13, color:C.mid }}>{label}</span>
+                <span style={{ fontFamily:'Fraunces,serif', fontSize:20, fontWeight:700, color:C.ink }}>{value}</span>
+              </div>
+            ))}
+          </div>
+        ))}
+      </div>
+    </div>
+  )
+}
+
+// ── USERS ─────────────────────────────────────────────────────────────────────
+function UsersPanel() {
+  const { users, loading, setRole } = useAdminUsers()
+  const [q, setQ] = useState('')
+  const [busyId, setBusyId] = useState(null)
+
+  const filtered = users.filter(u =>
+    (u.full_name || '').toLowerCase().includes(q.toLowerCase()) ||
+    (u.email || '').toLowerCase().includes(q.toLowerCase()) ||
+    (u.town_name || '').toLowerCase().includes(q.toLowerCase())
+  )
+
+  async function toggleRole(u) {
+    setBusyId(u.id)
+    await setRole(u.id, u.role === 'owner' ? 'consumer' : 'owner')
+    setBusyId(null)
+  }
+
+  return (
+    <div style={{ maxWidth:880, margin:'0 auto', padding:'32px 24px 60px' }}>
+      <h1 style={{ fontFamily:'Fraunces,serif', fontSize:28, fontWeight:700, marginBottom:6 }}>Users ({users.length})</h1>
+      <p style={{ fontSize:14, color:C.muted, marginBottom:20 }}>Everyone who's signed up. Switch someone between customer and business owner here.</p>
+
+      <input value={q} onChange={e=>setQ(e.target.value)} placeholder="Search name, email, or town…"
+        style={{ width:'100%', background:C.card, border:`1px solid ${C.border}`, borderRadius:12, padding:'11px 14px', fontSize:14, marginBottom:18 }}/>
+
+      {loading ? <div style={{ color:C.muted }}>Loading…</div> : (
+        <div style={{ background:C.card, border:`1px solid ${C.border}`, borderRadius:15, overflow:'hidden' }}>
+          {filtered.map((u, i) => (
+            <div key={u.id} style={{ display:'flex', alignItems:'center', gap:12, padding:'13px 16px', borderBottom: i<filtered.length-1 ? `1px solid ${C.border}` : 'none', flexWrap:'wrap' }}>
+              <div style={{ flex:1, minWidth:180 }}>
+                <div style={{ fontSize:13.5, fontWeight:600 }}>
+                  {u.full_name || u.email || 'Unnamed'}
+                  {u.is_admin && <span style={{ marginLeft:7, fontSize:10, fontWeight:700, color:C.amber, background:C.amberSoft, borderRadius:20, padding:'1px 7px' }}>ADMIN</span>}
+                </div>
+                <div style={{ fontSize:12, color:C.muted }}>
+                  {u.email && `${u.email} · `}{u.town_name || 'no town'} · {u.visit_count} scan{u.visit_count===1?'':'s'} · joined {new Date(u.created_at).toLocaleDateString()}
+                </div>
+              </div>
+              <span style={{ fontSize:11, fontWeight:700, borderRadius:20, padding:'3px 10px', color: u.role==='owner' ? '#8A6A00' : C.mid, background: u.role==='owner' ? C.amberSoft : C.bg, border:`1px solid ${u.role==='owner'?C.amberBrd:C.border}` }}>
+                {u.role}
+              </span>
+              <button onClick={()=>toggleRole(u)} disabled={busyId===u.id || u.is_admin}
+                title={u.is_admin ? "Can't change an admin's role here" : ''}
+                style={{ background:'none', border:`1px solid ${C.border}`, borderRadius:9, padding:'7px 12px', fontSize:12, fontWeight:600, color: u.is_admin ? C.muted : C.navy, cursor: u.is_admin ? 'default' : 'pointer', flexShrink:0 }}>
+                {busyId===u.id ? '…' : u.role==='owner' ? 'Make customer' : 'Make owner'}
+              </button>
+            </div>
+          ))}
+          {filtered.length === 0 && <div style={{ padding:'30px', textAlign:'center', color:C.muted, fontSize:14 }}>No matches.</div>}
+        </div>
+      )}
+    </div>
+  )
+}
