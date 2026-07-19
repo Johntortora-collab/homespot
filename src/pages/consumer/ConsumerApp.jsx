@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react'
-import { useParams } from 'react-router-dom'
+import { useParams, useNavigate } from 'react-router-dom'
 import { useAuth } from '../../lib/AuthContext'
 import { useSpots, useStamp, useFeedback, useMyCards, useBlockFeed, useTowns, useTownRequest, useFounderStatus, useMyPerks, useClaimOffer } from '../../lib/hooks'
 import { supabase } from '../../lib/supabase'
@@ -41,6 +41,7 @@ function Label({ children }) {
 export default function ConsumerApp() {
   const { profile, signOut, session, updateProfile, signUp, signIn, loading: authLoading } = useAuth()
   const { spotId: urlSpotId } = useParams() // present when loaded via /scan/:spotId deep link
+  const navigate = useNavigate()
   const [screen,      setScreen]      = useState(null)   // null = still deciding; set once profile resolves
   const [townId,      setTownId]      = useState(null)
   const [townData,    setTownData]    = useState(null)
@@ -221,7 +222,7 @@ export default function ConsumerApp() {
         }
       `}</style>
 
-      <div className="hs-phone" style={{ background:C.bg, overflow:'hidden', display:'flex', flexDirection:'column' }}>
+      <div className="hs-phone" style={{ background:C.bg, overflow:'hidden', display:'flex', flexDirection:'column', position:'relative' }}>
 
         {/* Status bar (desktop preview only — real phones already show their own) */}
         {!noChrome && (
@@ -244,6 +245,23 @@ export default function ConsumerApp() {
           {screen==='profile'    && <Profile onSwitch={()=>setScreen('townselect')} onNav={nav}/>}
           {screen==='account'    && <AccountScreen onBack={()=>setScreen('profile')}/>}
         </div>
+
+        {/* Owners browse the consumer app like anyone else — this is their way back
+            to the dashboard. Sits inside .hs-phone so it tracks the desktop frame
+            instead of floating against the viewport. */}
+        {!noChrome && profile?.role === 'owner' && (
+          <button
+            onClick={()=>navigate('/owner/dashboard')}
+            style={{
+              position:'absolute', right:14, bottom:84, zIndex:60,
+              background:'rgba(30,30,48,0.94)', border:`1px solid ${C.amberBrd}`,
+              borderRadius:20, padding:'8px 14px', fontSize:12, fontWeight:600,
+              color:C.amber, display:'flex', alignItems:'center', gap:7,
+              boxShadow:'0 6px 20px rgba(0,0,0,0.5)', cursor:'pointer',
+            }}>
+            <span style={{ fontSize:13 }}>🏪</span> My business →
+          </button>
+        )}
 
         {/* Bottom nav */}
         {!noChrome && <Nav tab={tab} onTab={(s,t)=>nav(s,t)} onScan={()=>setShowScanner(true)}/>}
