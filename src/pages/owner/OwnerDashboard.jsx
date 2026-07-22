@@ -919,6 +919,24 @@ const EDIT_CATEGORIES = ['Bakery','Coffee','Restaurant','Salon','Barbershop','Bo
 const EDIT_PERK_IDEAS = ['Free coffee','Free pastry','10% off','Free dessert','$5 off','Free item of choice']
 const EDIT_EMOJIS     = ['🥐','☕','🍕','✂️','📚','🌸','💪','🎨','🛒','🐾','🔧','🏪','🍔','🍣','🧁','🌮','🍷','🎵']
 
+// Owners type "rosasbakery.com" as often as the full URL, so accept both.
+// Anything that isn't http/https is rejected — a javascript: or data: value here
+// would run when a customer taps the link on the public spot page.
+function normaliseWebsite(raw) {
+  if (!raw) return null
+  const trimmed = String(raw).trim()
+  if (!trimmed) return null
+  const withScheme = /^https?:\/\//i.test(trimmed) ? trimmed : `https://${trimmed}`
+  try {
+    const u = new URL(withScheme)
+    if (u.protocol !== 'http:' && u.protocol !== 'https:') return null
+    if (!u.hostname.includes('.')) return null
+    return { href: u.href, label: u.hostname.replace(/^www\./, '') }
+  } catch {
+    return null
+  }
+}
+
 function SettingsPage({ spot, onSaved }) {
   const { updateSpot, deleteSpot, resetCustomerData, saving, error } = useManageSpot()
   const [f, setF] = useState({
@@ -928,6 +946,7 @@ function SettingsPage({ spot, onSaved }) {
     tagline:  spot.tagline || '',
     phone:    spot.phone || '',
     address:  spot.address || '',
+    website:  spot.website || '',
     stamps_required: String(spot.stamps_required ?? 8),
     perk:     spot.perk || '',
   })
@@ -951,11 +970,20 @@ function SettingsPage({ spot, onSaved }) {
 
   const up = (k,v) => setF(p => ({ ...p, [k]: v }))
   const stampsChanged = parseInt(f.stamps_required) !== spot.stamps_required
-  const ready = f.name.trim() && f.category && f.perk.trim()
+
+  // Blank is fine (the field is optional); non-blank has to parse.
+  const site        = normaliseWebsite(f.website)
+  const websiteBad  = !!f.website.trim() && !site
+
+  const ready = f.name.trim() && f.category && f.perk.trim() && !websiteBad
 
   async function handleSave() {
+    if (websiteBad) return
     const { error: err } = await updateSpot(spot.id, {
       ...f,
+      // Store the normalised form so the public page and the DB constraint
+      // both get a clean https:// URL regardless of what was typed.
+      website: site ? site.href : null,
       stamps_required: parseInt(f.stamps_required),
     })
     if (!err) {
@@ -1020,6 +1048,23 @@ function SettingsPage({ spot, onSaved }) {
           <Field label="Phone"><SimpleInput type="tel" value={f.phone} onChange={v=>up('phone',v)} placeholder="(555) 000-0000"/></Field>
           <Field label="Address"><SimpleInput value={f.address} onChange={v=>up('address',v)} placeholder="123 Main St"/></Field>
         </div>
+
+        <Field label="Website">
+          <SimpleInput value={f.website} onChange={v=>up('website',v)} placeholder="rosasbakery.com" maxLength={200}/>
+          {websiteBad ? (
+            <div style={{ fontSize:12, color:'#DC2626', marginTop:7 }}>
+              That doesn't look like a web address. Try something like <strong>rosasbakery.com</strong>.
+            </div>
+          ) : site ? (
+            <div style={{ fontSize:12, color:C.mid, marginTop:7 }}>
+              Customers will see a link to <strong style={{ color:C.ink }}>{site.label}</strong> on your page.
+            </div>
+          ) : (
+            <div style={{ fontSize:12, color:C.muted, marginTop:7 }}>
+              Optional. Your Facebook or Instagram page works too.
+            </div>
+          )}
+        </Field>
 
         <div style={{ height:1, background:C.border, margin:'4px 0' }}/>
 
