@@ -677,6 +677,28 @@ function Home({ townId, town, cat, setCat, onSpot, onNav }) {
   )
 }
 
+
+// Owners type "beanandbarrel.com" as often as they type the full URL, so accept
+// both. Anything that isn't http/https is rejected outright — a javascript: or
+// data: URL in this field would otherwise run when a customer taps the link.
+function normaliseWebsite(raw) {
+  if (!raw) return null
+  const trimmed = String(raw).trim()
+  if (!trimmed) return null
+  const withScheme = /^https?:\/\//i.test(trimmed) ? trimmed : `https://${trimmed}`
+  try {
+    const u = new URL(withScheme)
+    if (u.protocol !== 'http:' && u.protocol !== 'https:') return null
+    if (!u.hostname.includes('.')) return null
+    return {
+      href: u.href,
+      label: (u.hostname.replace(/^www\./, '') + (u.pathname === '/' ? '' : u.pathname)).replace(/\/$/, ''),
+    }
+  } catch {
+    return null
+  }
+}
+
 // ── SPOT DETAIL ───────────────────────────────────────────────────────────────
 function SpotDetail({ spotId, onBack, autoStamp = false, onAutoStampDone = () => {} }) {
   const { profile } = useAuth()
@@ -764,6 +786,7 @@ function SpotDetail({ spotId, onBack, autoStamp = false, onAutoStampDone = () =>
 
   const myStamps = spot.my_stamps || 0
   const mascot = getMascot(spot.category, spot.id)
+  const site = normaliseWebsite(spot.website)
 
   async function handleFeedback() {
     if (mood === null) return
@@ -779,6 +802,14 @@ function SpotDetail({ spotId, onBack, autoStamp = false, onAutoStampDone = () =>
           <div style={{ fontSize:48, marginBottom:8 }}>{spot.emoji}</div>
           <h2 style={{ fontFamily:'Fraunces,serif', fontSize:22, color:'#fff', fontWeight:700, marginBottom:3 }}>{spot.name}</h2>
           <div style={{ fontSize:11, color:'#aaa' }}>{spot.tagline}</div>
+          {site && (
+            <a href={site.href} target="_blank" rel="noopener noreferrer nofollow"
+              style={{ display:'inline-flex', alignItems:'center', gap:6, marginTop:10, background:'rgba(255,255,255,0.07)', border:`1px solid ${C.border}`, borderRadius:20, padding:'6px 13px', fontSize:11.5, color:'#fff', textDecoration:'none', maxWidth:'100%' }}>
+              <span style={{ fontSize:11 }}>🔗</span>
+              <span style={{ overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{site.label}</span>
+              <span style={{ color:C.dim, fontSize:10 }}>↗</span>
+            </a>
+          )}
         </div>
       </div>
 
