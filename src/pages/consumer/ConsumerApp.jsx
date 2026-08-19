@@ -3,8 +3,6 @@ import { useParams, useNavigate } from 'react-router-dom'
 import { useAuth } from '../../lib/AuthContext'
 import { useSpots, useStamp, useFeedback, useMyCards, useBlockFeed, useTowns, useTownRequest, useFounderStatus, useMyPerks, useClaimOffer } from '../../lib/hooks'
 import { supabase } from '../../lib/supabase'
-import { getMascot, getUnlockLabel, TOTAL_LAYERS } from '../../lib/mascotEngine'
-import Mascot from '../../components/Mascot'
 import QRScanner from '../../components/QRScanner'
 
 const C = {
@@ -785,7 +783,6 @@ function SpotDetail({ spotId, onBack, autoStamp = false, onAutoStampDone = () =>
   if (!spot)   return <div style={{ height:'100%', display:'flex', alignItems:'center', justifyContent:'center', background:C.bg, color:C.dim }}>Spot not found</div>
 
   const myStamps = spot.my_stamps || 0
-  const mascot = getMascot(spot.category, spot.id)
   const site = normaliseWebsite(spot.website)
 
   async function handleFeedback() {
@@ -839,37 +836,57 @@ function SpotDetail({ spotId, onBack, autoStamp = false, onAutoStampDone = () =>
           </div>
         )}
 
-        {/* Mascot card */}
-        <div style={{ background:C.card, border:`1px solid ${C.border}`, borderRadius:18, padding:16, marginBottom:16 }}>
-          <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:6 }}>
-            <div>
-              <div style={{ fontFamily:'Fraunces,serif', fontSize:14, color:'#fff', fontWeight:600 }}>
-                {myStamps > 0 ? mascot.name : 'Your buddy'}
-              </div>
-              <div style={{ fontSize:11, color:'#666' }}>
-                {myStamps > 0 ? getUnlockLabel(myStamps) : 'Scan once to meet them!'}
-              </div>
+        {/* Stamp card */}
+        {(() => {
+          const remaining = Math.max(0, spot.stamps_required - myStamps)
+          const complete  = myStamps >= spot.stamps_required
+          const accent    = spot.color || C.amber
+          return (
+        <div style={{ background:C.card, border:`1px solid ${C.border}`, borderRadius:18, padding:'20px 16px 16px', marginBottom:16 }}>
+
+          {/* Big count centerpiece */}
+          <div style={{ textAlign:'center', marginBottom:14 }}>
+            <div style={{ fontFamily:'Fraunces,serif', fontWeight:700, color:'#fff', lineHeight:1, display:'flex', alignItems:'baseline', justifyContent:'center', gap:6 }}>
+              <span style={{ fontSize:52 }}>{myStamps}</span>
+              <span style={{ fontSize:22, color:C.dim }}>of {spot.stamps_required}</span>
             </div>
-            <div style={{ background:C.amber, color:C.bg, fontSize:11, fontWeight:700, padding:'4px 10px', borderRadius:20 }}>{myStamps}/{spot.stamps_required}</div>
+            <div style={{ fontSize:12.5, color: complete ? C.sage : '#888', marginTop:6, fontWeight:600 }}>
+              {complete
+                ? '🎉 Reward ready — show this at the counter'
+                : myStamps === 0
+                  ? 'Scan at the counter to collect your first stamp'
+                  : `${remaining} more check-in${remaining === 1 ? '' : 's'} to earn your reward`}
+            </div>
           </div>
 
-          {/* Character display */}
-          <div style={{ display:'flex', alignItems:'center', justifyContent:'center', padding:'8px 0 4px' }}>
-            <Mascot mascot={mascot} stamps={myStamps} size={150} customerName={profile?.full_name?.split(' ')[0]} />
+          {/* Stamp circles */}
+          <div style={{ display:'flex', flexWrap:'wrap', gap:8, justifyContent:'center', marginBottom:14 }}>
+            {Array.from({length:spot.stamps_required}).map((_,i)=>{
+              const filled = i < myStamps
+              return (
+                <div key={i} style={{
+                  width:30, height:30, borderRadius:'50%',
+                  display:'flex', alignItems:'center', justifyContent:'center',
+                  fontSize:14, fontWeight:700,
+                  background: filled ? accent : 'transparent',
+                  color: filled ? C.bg : '#555',
+                  border: filled ? `1px solid ${accent}` : `1.5px dashed #3a3a4a`,
+                }}>
+                  {filled ? '✓' : i + 1}
+                </div>
+              )
+            })}
           </div>
 
-          {/* Stamp dots (secondary, smaller now) */}
-          <div style={{ display:'flex', gap:5, justifyContent:'center', marginTop:8, marginBottom:10 }}>
-            {Array.from({length:spot.stamps_required}).map((_,i)=>(
-              <div key={i} style={{ width:9, height:9, borderRadius:'50%', background:i<myStamps?(spot.color||C.amber):C.card2, border:`1px solid ${i<myStamps?(spot.color||C.amber):'#333'}` }}/>
-            ))}
+          <div style={{ background:C.card2, borderRadius:20, height:4, overflow:'hidden', marginBottom:8 }}>
+            <div style={{ width:`${Math.min(100,(myStamps/spot.stamps_required)*100)}%`, height:'100%', background:`linear-gradient(90deg,${accent},${C.amber})`, borderRadius:20, transition:'width 0.8s' }}/>
           </div>
-
-          <div style={{ background:C.card2, borderRadius:20, height:4, overflow:'hidden', marginBottom:7 }}>
-            <div style={{ width:`${(myStamps/spot.stamps_required)*100}%`, height:'100%', background:`linear-gradient(90deg,${spot.color||C.amber},${C.amber})`, borderRadius:20, transition:'width 0.8s' }}/>
+          <div style={{ fontSize:11, color:'#555', textAlign:'center' }}>
+            {complete ? `Earned: ${spot.perk}` : `Reward: ${spot.perk}`}
           </div>
-          <div style={{ fontSize:11, color:'#555', textAlign:'center' }}>{spot.stamps_required-myStamps} stamps to earn: {spot.perk}</div>
         </div>
+          )
+        })()}
 
         <div style={{ textAlign:'center', marginBottom:20 }}>
           <div style={{ fontSize:12, color:'#555', marginBottom:11 }}>At the register? Scan their QR to add a stamp</div>
@@ -918,11 +935,10 @@ function SpotDetail({ spotId, onBack, autoStamp = false, onAutoStampDone = () =>
 
       {showReveal && (
         <UnlockReveal
-          mascot={mascot}
           newStamps={revealStamps}
+          totalStamps={spot.stamps_required}
           perkEarned={perkEarned}
           spotPerk={spot.perk}
-          customerName={profile?.full_name?.split(' ')[0]}
           spotColor={spot.color || C.amber}
           onClose={() => setShowReveal(false)}
         />
@@ -932,20 +948,39 @@ function SpotDetail({ spotId, onBack, autoStamp = false, onAutoStampDone = () =>
 }
 
 // ── UNLOCK REVEAL ─────────────────────────────────────────────────────────────
-function UnlockReveal({ mascot, newStamps, perkEarned, spotPerk, customerName, spotColor, onClose }) {
+function UnlockReveal({ newStamps, totalStamps, perkEarned, spotPerk, spotColor, onClose }) {
+  const complete  = perkEarned || (totalStamps && newStamps >= totalStamps)
+  const remaining = Math.max(0, (totalStamps || 0) - newStamps)
   return (
     <div style={{ position:'fixed', inset:0, background:'rgba(10,10,20,0.94)', display:'flex', alignItems:'center', justifyContent:'center', zIndex:100, animation:'fadeIn 0.3s ease', borderRadius:44 }}>
       <div style={{ textAlign:'center', maxWidth:300, padding:'0 20px' }}>
-        <div style={{ fontSize:10, fontWeight:700, color:C.amber, letterSpacing:'0.15em', textTransform:'uppercase', marginBottom:14, animation:'up 0.4s ease' }}>
-          Stamp #{newStamps} added!
+        <div style={{ fontSize:10, fontWeight:700, color:C.amber, letterSpacing:'0.15em', textTransform:'uppercase', marginBottom:18, animation:'up 0.4s ease' }}>
+          {complete ? 'Card complete!' : 'Check-in added!'}
         </div>
 
-        <div style={{ animation:'bounce 0.6s ease', filter:`drop-shadow(0 0 30px ${spotColor}66)` }}>
-          <Mascot mascot={mascot} stamps={newStamps} size={190} customerName={customerName} />
+        {/* Stamp badge */}
+        <div style={{ animation:'bounce 0.6s ease', filter:`drop-shadow(0 0 30px ${spotColor}66)`, display:'flex', justifyContent:'center' }}>
+          <div style={{
+            width:130, height:130, borderRadius:'50%',
+            background:`linear-gradient(135deg,${spotColor},${C.amber})`,
+            display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center',
+            color:C.bg,
+          }}>
+            <div style={{ fontFamily:'Fraunces,serif', fontSize:44, fontWeight:700, lineHeight:1 }}>
+              {complete ? '★' : newStamps}
+            </div>
+            {!complete && totalStamps && (
+              <div style={{ fontSize:13, fontWeight:700, opacity:0.75, marginTop:2 }}>of {totalStamps}</div>
+            )}
+          </div>
         </div>
 
-        <div style={{ fontFamily:'Fraunces,serif', fontSize:19, color:'#fff', fontWeight:700, marginTop:8, animation:'up 0.4s ease 0.2s both' }}>
-          {mascot.name} {getUnlockLabel(newStamps)}
+        <div style={{ fontFamily:'Fraunces,serif', fontSize:19, color:'#fff', fontWeight:700, marginTop:16, animation:'up 0.4s ease 0.2s both' }}>
+          {complete
+            ? 'Reward unlocked!'
+            : remaining === 0
+              ? 'All stamps collected!'
+              : `${remaining} more to go`}
         </div>
 
         {perkEarned && (
