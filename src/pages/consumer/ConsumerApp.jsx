@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { useAuth } from '../../lib/AuthContext'
-import { useSpots, useStamp, useFeedback, useMyCards, useBlockFeed, useTowns, useTownRequest, useFounderStatus, useMyPerks, useClaimOffer } from '../../lib/hooks'
+import { useSpots, useStamp, useFeedback, useMyCards, useTowns, useTownRequest, useFounderStatus, useMyPerks, useClaimOffer } from '../../lib/hooks'
 import { supabase } from '../../lib/supabase'
 import QRScanner from '../../components/QRScanner'
 
@@ -236,10 +236,10 @@ export default function ConsumerApp() {
           {screen==='townselect' && <TownSelect onSelect={selectTown} onRequestTown={handleRequestTownClick}/>}
           {screen==='signup'     && <SignupScreen town={pendingTown} authMode={authMode} setAuthMode={setAuthMode} onSignup={handleSignup} onSignIn={handleSignIn} onBack={()=>{ setRequestTownAfterAuth(false); setScreen('townselect') }}/>}
           {screen==='requesttown' && <RequestTownScreen onBack={()=>setScreen(townId ? 'home' : 'townselect')} onSubmitted={()=>setScreen(townId ? 'home' : 'townselect')}/>}
-          {screen==='home'       && <Home townId={townId} town={townData} cat={cat} setCat={setCat} onSpot={openSpot} onNav={nav}/>}
+          {screen==='home'       && <MainStreet townId={townId} town={townData} cat={cat} setCat={setCat} onSpot={openSpot} onNav={nav}/>}
           {screen==='spot'       && <SpotDetail spotId={spotId} onBack={goHome} autoStamp={autoStamp} onAutoStampDone={()=>setAutoStamp(false)}/>}
-          {screen==='perks'      && <Perks onSpot={openSpot}/>}
-          {screen==='block'      && <Block townId={townId} town={townData} onSpot={openSpot}/>}
+          {screen==='perks'      && <MySpots onSpot={openSpot}/>}
+          {screen==='surprise'   && <Surprise townId={townId} town={townData} onSpot={openSpot}/>}
           {screen==='profile'    && <Profile onSwitch={()=>setScreen('townselect')} onNav={nav}/>}
           {screen==='account'    && <AccountScreen onBack={()=>setScreen('profile')}/>}
         </div>
@@ -592,12 +592,22 @@ function SignupScreen({ town, authMode, setAuthMode, onSignup, onSignIn, onBack 
 }
 
 // ── HOME ──────────────────────────────────────────────────────────────────────
-function Home({ townId, town, cat, setCat, onSpot, onNav }) {
+function MainStreet({ townId, town, cat, setCat, onSpot, onNav }) {
   const { spots, loading } = useSpots(townId)
   const cats = ['All','Food','Coffee','Salon','Books','Auto','Gifts']
-  const filtered = cat === 'All' ? spots : spots.filter(s => s.category === cat)
-  const withOffers = spots.filter(s => s.latest_offer)
+  const [q, setQ] = useState('')
   const [showBanner, setShowBanner] = useState(true)
+
+  // Directory, not a feed: every active business in the town, narrowed by
+  // category chip and/or a name search. Both filters apply together.
+  const needle = q.trim().toLowerCase()
+  const filtered = spots
+    .filter(s => cat === 'All' || s.category === cat)
+    .filter(s => !needle
+      || s.name?.toLowerCase().includes(needle)
+      || s.tagline?.toLowerCase().includes(needle)
+      || s.category?.toLowerCase().includes(needle))
+  const withOffers = spots.filter(s => s.latest_offer)
 
   return (
     <div style={{ height:'100%', overflowY:'auto', background:C.bg }}>
@@ -606,9 +616,12 @@ function Home({ townId, town, cat, setCat, onSpot, onNav }) {
         <div style={{ position:'relative', zIndex:2 }}>
           <TownPill>📍 {town?.name || 'Your town'}, {town?.state || ''}</TownPill>
           <h1 style={{ fontFamily:'Fraunces,serif', fontSize:28, color:'#fff', fontWeight:700, lineHeight:1.15, marginBottom:6 }}>
-            Your <span style={{ color:C.amber, fontStyle:'italic' }}>spots</span>
+            Main <span style={{ color:C.amber, fontStyle:'italic' }}>Street</span>
           </h1>
-          <p style={{ fontSize:12, color:C.dim }}>{spots.length} spots nearby</p>
+          <p style={{ fontSize:12, color:C.dim }}>
+            {loading ? 'Loading local businesses…'
+              : `${spots.length} ${spots.length === 1 ? 'business' : 'businesses'} on Homespot${town?.name ? ` in ${town.name}` : ''}`}
+          </p>
         </div>
       </div>
 
@@ -639,6 +652,22 @@ function Home({ townId, town, cat, setCat, onSpot, onNav }) {
         </>
       )}
 
+      {/* Search only earns its space once there's a roster worth searching. */}
+      {spots.length >= 8 && (
+        <div style={{ padding:'16px 16px 0' }}>
+          <div style={{ display:'flex', alignItems:'center', gap:9, background:C.card, border:`1px solid ${C.border}`, borderRadius:12, padding:'10px 13px' }}>
+            <span style={{ fontSize:13, color:'#555' }}>⌕</span>
+            <input
+              value={q}
+              onChange={e=>setQ(e.target.value)}
+              placeholder="Search businesses"
+              style={{ flex:1, background:'none', border:'none', color:'#fff', fontSize:13.5 }}
+            />
+            {q && <button onClick={()=>setQ('')} style={{ background:'none', border:'none', color:'#555', fontSize:14, padding:0 }}>✕</button>}
+          </div>
+        </div>
+      )}
+
       <div style={{ display:'flex', gap:8, padding:'16px 16px 0', overflowX:'auto' }}>
         {cats.map(c=>(
           <button key={c} onClick={()=>setCat(c)} style={{ background:c===cat?C.amber:C.card2, color:c===cat?C.bg:'#aaa', fontFamily:'Inter,sans-serif', fontSize:11, fontWeight:c===cat?600:400, padding:'5px 13px', borderRadius:20, border:'none', cursor:'pointer', whiteSpace:'nowrap', flexShrink:0 }}>{c}</button>
@@ -651,8 +680,19 @@ function Home({ townId, town, cat, setCat, onSpot, onNav }) {
         ) : filtered.length === 0 ? (
           <div style={{ textAlign:'center', padding:'48px 24px' }}>
             <div style={{ fontSize:36, marginBottom:12 }}>🏪</div>
-            <div style={{ fontFamily:'Fraunces,serif', fontSize:18, color:'#fff', marginBottom:6 }}>No spots yet</div>
-            <div style={{ fontSize:13, color:'#555', lineHeight:1.6 }}>Businesses in {town?.name} haven't joined Homespot yet. Share it with your favourite local spots!</div>
+            {spots.length === 0 ? (
+              <>
+                <div style={{ fontFamily:'Fraunces,serif', fontSize:18, color:'#fff', marginBottom:6 }}>No businesses yet</div>
+                <div style={{ fontSize:13, color:'#555', lineHeight:1.6 }}>Businesses in {town?.name} haven't joined Homespot yet. Share it with your favourite local spots!</div>
+              </>
+            ) : (
+              <>
+                <div style={{ fontFamily:'Fraunces,serif', fontSize:18, color:'#fff', marginBottom:6 }}>Nothing matches</div>
+                <div style={{ fontSize:13, color:'#555', lineHeight:1.6 }}>
+                  No {cat !== 'All' ? `${cat.toLowerCase()} ` : ''}businesses{needle ? ` for “${q.trim()}”` : ''}. Try a different search or category.
+                </div>
+              </>
+            )}
           </div>
         ) : filtered.map((s,i) => (
           <div key={s.id} onClick={()=>onSpot(s.id)} style={{ background:C.card, border:`1px solid ${C.border}`, borderRadius:14, padding:12, marginBottom:9, display:'flex', gap:10, alignItems:'center', cursor:'pointer', animation:'up 0.3s ease', animationDelay:`${i*0.05}s`, animationFillMode:'both' }}>
@@ -998,7 +1038,7 @@ function UnlockReveal({ newStamps, totalStamps, perkEarned, spotPerk, spotColor,
 }
 
 // ── PERKS ─────────────────────────────────────────────────────────────────────
-function Perks({ onSpot }) {
+function MySpots({ onSpot }) {
   const { cards, loading } = useMyCards()
   const { pending, redeemed, loading: perksLoading, redeem } = useMyPerks()
   const [confirming, setConfirming] = useState(null)  // perk pending confirmation
@@ -1018,7 +1058,12 @@ function Perks({ onSpot }) {
     <div style={{ height:'100%', overflowY:'auto', background:C.bg }}>
       <div style={{ padding:'20px 16px 4px' }}>
         <TownPill>Your Progress</TownPill>
-        <h2 style={{ fontFamily:'Fraunces,serif', fontSize:24, color:'#fff', marginTop:6 }}>Local <span style={{ color:C.amber, fontStyle:'italic' }}>Perks</span></h2>
+        <h2 style={{ fontFamily:'Fraunces,serif', fontSize:24, color:'#fff', marginTop:6 }}>My <span style={{ color:C.amber, fontStyle:'italic' }}>Spots</span></h2>
+        <p style={{ fontSize:12, color:'#555', marginTop:4 }}>
+          {cards.length > 0
+            ? `${cards.length} ${cards.length === 1 ? 'place' : 'places'} you've checked into`
+            : 'Places you check into show up here'}
+        </p>
       </div>
 
       <div style={{ display:'flex', gap:8, padding:'12px 16px' }}>
@@ -1064,20 +1109,30 @@ function Perks({ onSpot }) {
             </>
           )}
 
-          {/* Cards still filling up */}
+          {/* Every business this person has checked into. useMyCards already
+              sorts by lifetime visits, so the top of this list is their
+              regulars — that ordering IS the "frequent" part of My Spots. */}
           {cards.length > 0 && (
             <>
-              <div style={{ padding:'14px 16px 8px' }}><Label>In progress</Label></div>
+              <div style={{ padding:'14px 16px 8px' }}><Label>Where you go</Label></div>
               {cards.map(c=>(
                 <div key={c.id} onClick={()=>onSpot(c.spot_id)} style={{ background:C.card, border:`1px solid ${C.border}`, borderRadius:14, padding:'12px 14px', margin:'0 16px 9px', display:'flex', alignItems:'center', gap:12, cursor:'pointer' }}>
                   <span style={{ fontSize:24 }}>{c.spots?.emoji}</span>
-                  <div style={{ flex:1 }}>
-                    <div style={{ fontFamily:'Fraunces,serif', fontSize:13, color:'#fff' }}>{c.spots?.name}</div>
+                  <div style={{ flex:1, minWidth:0 }}>
+                    <div style={{ display:'flex', alignItems:'center', gap:7 }}>
+                      <div style={{ fontFamily:'Fraunces,serif', fontSize:13, color:'#fff' }}>{c.spots?.name}</div>
+                      {(c.lifetime||0) >= 5 && (
+                        <span style={{ background:C.amberDim, border:`1px solid ${C.amberBrd}`, color:C.amber, fontSize:8, fontWeight:700, letterSpacing:'0.08em', padding:'2px 6px', borderRadius:6, flexShrink:0 }}>REGULAR</span>
+                      )}
+                    </div>
+                    <div style={{ fontSize:10.5, color:'#555', marginTop:2 }}>
+                      {c.lifetime||0} {(c.lifetime||0) === 1 ? 'visit' : 'visits'}
+                    </div>
                     <div style={{ background:C.card2, borderRadius:20, height:4, overflow:'hidden', marginTop:6 }}>
                       <div style={{ width:`${((c.stamps||0)/(c.spots?.stamps_required||8))*100}%`, height:'100%', background:`linear-gradient(90deg,${c.spots?.color||C.amber},${C.amber})`, borderRadius:20 }}/>
                     </div>
                   </div>
-                  <span style={{ fontSize:11, color:'#444' }}>{c.stamps||0}/{c.spots?.stamps_required||8}</span>
+                  <span style={{ fontSize:11, color:'#444', flexShrink:0 }}>{c.stamps||0}/{c.spots?.stamps_required||8}</span>
                 </div>
               ))}
             </>
@@ -1103,8 +1158,8 @@ function Perks({ onSpot }) {
           {cards.length === 0 && pending.length === 0 && (
             <div style={{ textAlign:'center', padding:'48px 24px' }}>
               <div style={{ fontSize:36, marginBottom:12 }}>✦</div>
-              <div style={{ fontFamily:'Fraunces,serif', fontSize:18, color:'#fff', marginBottom:6 }}>No stamps yet</div>
-              <div style={{ fontSize:13, color:'#555' }}>Tap the sticker at a local spot's counter to start earning.</div>
+              <div style={{ fontFamily:'Fraunces,serif', fontSize:18, color:'#fff', marginBottom:6 }}>No spots yet</div>
+              <div style={{ fontSize:13, color:'#555', lineHeight:1.6 }}>Tap the sticker at a local spot's counter to start earning. Browse Main Street to see who's on Homespot near you.</div>
             </div>
           )}
         </>
@@ -1261,38 +1316,176 @@ function AccountScreen({ onBack }) {
   )
 }
 
-// ── BLOCK ─────────────────────────────────────────────────────────────────────
-function Block({ townId, town, onSpot }) {
-  const { feed, loading } = useBlockFeed(townId)
-  const tc = { visit:C.amber, offer:'#E8956D', new:'#7BA05B' }
-  const tl = { visit:'STAMP EARNED', offer:'DEAL ALERT', new:'NEW SPOT' }
+// ── SURPRISE ME ───────────────────────────────────────────────────────────────
+//
+// "We don't know what to do today." Two buttons, one random business.
+//
+// The bucketing is deliberately a plain client-side map rather than a new
+// column: with a pilot-sized roster it's one place to edit and needs no
+// migration. If categories multiply, promote this to a `business_type` enum on
+// `spots` and have owners pick it during onboarding.
+const EAT_CATEGORIES = ['Food', 'Coffee', 'Bakery', 'Dessert', 'Bar']
+
+function bucketOf(spot) {
+  return EAT_CATEGORIES.includes(spot.category) ? 'eat' : 'do'
+}
+
+// Remembering the last few picks is what stops a five-restaurant town from
+// serving the same pizza place three spins running, which reads as broken
+// rather than random.
+const RECENT_KEY = 'hs_surprise_recent'
+const RECENT_MAX = 4
+
+function readRecent() {
+  try { return JSON.parse(localStorage.getItem(RECENT_KEY)) || [] } catch { return [] }
+}
+function pushRecent(id) {
+  try {
+    const next = [id, ...readRecent().filter(x => x !== id)].slice(0, RECENT_MAX)
+    localStorage.setItem(RECENT_KEY, JSON.stringify(next))
+  } catch {}
+}
+
+function Surprise({ townId, town, onSpot }) {
+  const { spots, loading } = useSpots(townId)
+  const [mode,   setMode]   = useState(null)   // null | 'eat' | 'do'
+  const [pick,   setPick]   = useState(null)
+  const [rolling, setRolling] = useState(false)
+
+  const pools = {
+    eat: spots.filter(s => bucketOf(s) === 'eat'),
+    do:  spots.filter(s => bucketOf(s) === 'do'),
+  }
+
+  function roll(which) {
+    const pool = pools[which]
+    if (pool.length === 0) { setMode(which); setPick(null); return }
+
+    // Exclude recent picks — unless that would leave nothing, in which case a
+    // repeat beats an empty screen.
+    const recent = readRecent()
+    const fresh  = pool.filter(s => !recent.includes(s.id))
+    const from   = fresh.length > 0 ? fresh : pool.filter(s => s.id !== pick?.id)
+    const finalPool = from.length > 0 ? from : pool
+
+    const chosen = finalPool[Math.floor(Math.random() * finalPool.length)]
+
+    setMode(which)
+    setRolling(true)
+    // Short, honest beat. A long spin animation oversells a draw from a pool
+    // of six and makes the reveal feel like a slot machine that owes you.
+    setTimeout(() => {
+      setPick(chosen)
+      pushRecent(chosen.id)
+      setRolling(false)
+    }, 450)
+  }
+
+  function reset() { setMode(null); setPick(null) }
 
   return (
     <div style={{ height:'100%', overflowY:'auto', background:C.bg }}>
       <div style={{ padding:'20px 16px 4px' }}>
         <TownPill>{town?.name || 'Your town'}</TownPill>
-        <h2 style={{ fontFamily:'Fraunces,serif', fontSize:24, color:'#fff', marginTop:6 }}>Main <span style={{ color:'#7BA05B', fontStyle:'italic' }}>Street</span></h2>
-        <p style={{ fontSize:12, color:'#555', marginTop:4 }}>What's happening in your town</p>
+        <h2 style={{ fontFamily:'Fraunces,serif', fontSize:24, color:'#fff', marginTop:6 }}>
+          Surprise <span style={{ color:'#7BA05B', fontStyle:'italic' }}>me</span>
+        </h2>
+        <p style={{ fontSize:12, color:'#555', marginTop:4 }}>Can't decide? Let Homespot pick.</p>
       </div>
-      <div style={{ padding:'14px 16px 100px' }}>
-        {loading ? <div style={{ textAlign:'center', padding:'40px', color:C.dim }}>Loading…</div>
-        : feed.length === 0 ? (
+
+      <div style={{ padding:'18px 16px 100px' }}>
+        {loading ? (
+          <div style={{ textAlign:'center', padding:'40px', color:C.dim }}>Loading…</div>
+        ) : spots.length === 0 ? (
           <div style={{ textAlign:'center', padding:'48px 24px' }}>
-            <div style={{ fontSize:36, marginBottom:12 }}>🏘️</div>
-            <div style={{ fontFamily:'Fraunces,serif', fontSize:18, color:'#fff', marginBottom:6 }}>Quiet on Main Street</div>
-            <div style={{ fontSize:13, color:'#555' }}>Activity from local spots will appear here as people visit and businesses send offers.</div>
+            <div style={{ fontSize:36, marginBottom:12 }}>🎲</div>
+            <div style={{ fontFamily:'Fraunces,serif', fontSize:18, color:'#fff', marginBottom:6 }}>Nothing to pick from yet</div>
+            <div style={{ fontSize:13, color:'#555', lineHeight:1.6 }}>Once businesses in {town?.name || 'your town'} join Homespot, this is where you'll get a suggestion.</div>
           </div>
-        ) : feed.map((item,i)=>(
-          <div key={item.id} onClick={()=>item.spot_id && onSpot(item.spot_id)} style={{ background:C.card, border:`1px solid ${C.border}`, borderRadius:14, padding:'12px 14px', marginBottom:9, display:'flex', gap:11, alignItems:'flex-start', animation:'up 0.3s ease', animationDelay:`${i*0.06}s`, animationFillMode:'both', cursor:item.spot_id?'pointer':'default' }}>
-            <div style={{ width:40, height:40, background:`${tc[item.type]||C.amber}18`, border:`1px solid ${tc[item.type]||C.amber}44`, borderRadius:11, display:'flex', alignItems:'center', justifyContent:'center', fontSize:18, flexShrink:0 }}>{item.emoji}</div>
-            <div style={{ flex:1 }}>
-              <div style={{ fontSize:9, fontWeight:700, color:tc[item.type]||C.amber, letterSpacing:'0.1em', marginBottom:2 }}>{tl[item.type]||'UPDATE'}</div>
-              <div style={{ fontFamily:'Fraunces,serif', fontSize:13, color:'#fff', marginBottom:1 }}>{item.name}</div>
-              <div style={{ fontSize:11, color:'#666' }}>{item.text}</div>
+        ) : (
+          <>
+            {/* The two choices. Always visible so a second roll is one tap. */}
+            <div style={{ display:'flex', gap:11, marginBottom:20 }}>
+              {[
+                ['eat', '🍽️', 'Somewhere to eat', C.amber],
+                ['do',  '🎈', 'Something to do',   '#7BA05B'],
+              ].map(([id, icon, label, colour]) => (
+                <button
+                  key={id}
+                  onClick={()=>roll(id)}
+                  disabled={rolling}
+                  style={{
+                    flex:1, background: mode===id ? `${colour}1F` : C.card,
+                    border:`1px solid ${mode===id ? colour : C.border}`,
+                    borderRadius:16, padding:'18px 12px', cursor:'pointer',
+                    display:'flex', flexDirection:'column', alignItems:'center', gap:8,
+                    opacity: rolling ? 0.6 : 1, transition:'all 0.2s ease',
+                  }}>
+                  <span style={{ fontSize:26 }}>{icon}</span>
+                  <span style={{ fontFamily:'Fraunces,serif', fontSize:12.5, fontWeight:600, color: mode===id ? colour : '#fff', textAlign:'center', lineHeight:1.3 }}>{label}</span>
+                  <span style={{ fontSize:9.5, color:'#555' }}>{pools[id].length} {pools[id].length === 1 ? 'spot' : 'spots'}</span>
+                </button>
+              ))}
             </div>
-            {item.spot_id && <span style={{ color:'#444', fontSize:14, alignSelf:'center' }}>›</span>}
-          </div>
-        ))}
+
+            {rolling && (
+              <div style={{ textAlign:'center', padding:'32px 24px', color:C.dim, fontSize:13 }}>
+                Picking a spot…
+              </div>
+            )}
+
+            {/* Chose a bucket that has nothing in it yet */}
+            {!rolling && mode && !pick && (
+              <div style={{ textAlign:'center', padding:'32px 24px' }}>
+                <div style={{ fontSize:30, marginBottom:10 }}>🤷</div>
+                <div style={{ fontFamily:'Fraunces,serif', fontSize:15.5, color:'#fff', marginBottom:6 }}>
+                  No {mode === 'eat' ? 'places to eat' : 'things to do'} yet
+                </div>
+                <div style={{ fontSize:12.5, color:'#555', lineHeight:1.6 }}>
+                  Nothing in {town?.name || 'your town'} fits that yet. Try the other button, or browse Main Street.
+                </div>
+              </div>
+            )}
+
+            {/* The result */}
+            {!rolling && pick && (
+              <div style={{ animation:'pop 0.35s ease' }}>
+                <div style={{ textAlign:'center', marginBottom:12 }}>
+                  <Label>{mode === 'eat' ? 'Go eat here' : 'Go check this out'}</Label>
+                </div>
+
+                <div style={{ background:'linear-gradient(150deg,#251A45,#1E1E30 62%)', border:`1px solid ${pick.color || C.amber}55`, borderRadius:20, padding:'26px 20px', textAlign:'center' }}>
+                  <div style={{ fontSize:46, marginBottom:12 }}>{pick.emoji}</div>
+                  <div style={{ fontFamily:'Fraunces,serif', fontSize:21, color:'#fff', fontWeight:700, marginBottom:5 }}>{pick.name}</div>
+                  {pick.tagline && <div style={{ fontSize:12.5, color:C.dim, lineHeight:1.55, marginBottom:10 }}>{pick.tagline}</div>}
+
+                  <div style={{ display:'inline-flex', alignItems:'center', gap:6, background:C.ghost, borderRadius:20, padding:'4px 11px', fontSize:10.5, color:'#888', marginBottom:6 }}>
+                    {pick.category}
+                  </div>
+
+                  {pick.latest_offer && (
+                    <div style={{ background:C.amberDim, border:`1px solid ${C.amberBrd}`, borderRadius:11, padding:'9px 12px', fontSize:11.5, color:C.amber, marginTop:10, lineHeight:1.45 }}>
+                      🔥 {pick.latest_offer}
+                    </div>
+                  )}
+
+                  <div style={{ display:'flex', gap:9, marginTop:18 }}>
+                    <button onClick={()=>roll(mode)} style={{ flex:1, background:'none', border:`1px solid ${C.border}`, borderRadius:12, padding:'12px', fontSize:13, color:'#aaa', cursor:'pointer' }}>
+                      Try again
+                    </button>
+                    <button onClick={()=>onSpot(pick.id)} style={{ flex:1, background:C.amber, border:'none', borderRadius:12, padding:'12px', fontSize:13, fontWeight:600, color:C.bg, cursor:'pointer' }}>
+                      Take me there →
+                    </button>
+                  </div>
+                </div>
+
+                <button onClick={reset} style={{ width:'100%', background:'none', border:'none', color:'#444', fontSize:11.5, marginTop:14, cursor:'pointer' }}>
+                  Start over
+                </button>
+              </div>
+            )}
+          </>
+        )}
       </div>
     </div>
   )
@@ -1331,8 +1524,9 @@ function Profile({ onSwitch, onNav }) {
     ...(profile?.role === 'owner'
       ? [['My Business Dashboard','🏪', () => { window.location.href = '/owner/dashboard' }]]
       : []),
-    ['My Spot Cards','🗂', () => onNav('perks','perks')],
-    ['Main Street','🏘️', () => onNav('block','block')],
+    ['My Spots','🗂', () => onNav('perks','perks')],
+    ['Main Street','🏘️', () => onNav('home','home')],
+    ['Surprise Me','🎲', () => onNav('surprise','surprise')],
     ['Invite Friends','💌', handleInvite],
     ['Account & Security','⚙', () => onNav('account','profile')],
   ]
@@ -1419,11 +1613,11 @@ function Profile({ onSwitch, onNav }) {
 // ── NAV ───────────────────────────────────────────────────────────────────────
 function Nav({ tab, onTab, onScan }) {
   const tabs = [
-    {id:'home',    label:'Home',  icon:'⌂',  sc:'home'},
-    {id:'perks',   label:'Perks', icon:'✦',  sc:'perks'},
-    {id:'scan',    label:'',      icon:'⬡',  sc:null, center:true},
-    {id:'block',   label:'Main St', icon:'🏘️', sc:'block'},
-    {id:'profile', label:'You',   icon:'◎',  sc:'profile'},
+    {id:'home',     label:'Main St',  icon:'🏘️', sc:'home'},
+    {id:'perks',    label:'My Spots', icon:'✦',  sc:'perks'},
+    {id:'scan',     label:'',         icon:'⬡',  sc:null, center:true},
+    {id:'surprise', label:'Surprise', icon:'🎲', sc:'surprise'},
+    {id:'profile',  label:'You',      icon:'◎',  sc:'profile'},
   ]
   return (
     <div className="hs-bottomnav" style={{ height:70, background:'#0F0F1E', borderTop:`1px solid ${C.border}`, display:'flex', alignItems:'center', justifyContent:'space-around', padding:'0 8px', flexShrink:0 }}>
