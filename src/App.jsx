@@ -21,6 +21,7 @@ import SpotPreview from './pages/SpotPreview'
 
 // Admin
 import AdminTowns from './pages/AdminTowns'
+import AdminDrafts from './pages/AdminDrafts'
 
 function Router() {
   const { session, profile, loading } = useAuth()
@@ -62,6 +63,7 @@ function Router() {
     <Routes>
       {legalRoutes}
       <Route path="/admin"           element={<AdminTowns />} />
+      <Route path="/admin/drafts"    element={<AdminDrafts />} />
       <Route path="/scan/:spotId"    element={<ScanRoute />} />
       <Route path="/owner"           element={<Navigate to="/owner/dashboard" replace />} />
       <Route path="/owner/onboard"   element={<OwnerOnboarding />} />
@@ -81,6 +83,7 @@ function Router() {
     <Routes>
       {legalRoutes}
       <Route path="/admin"        element={<AdminTowns />} />
+      <Route path="/admin/drafts" element={<AdminDrafts />} />
       <Route path="/scan/:spotId" element={<ScanRoute />} />
       {/* A signed-in consumer must still be able to reach business onboarding.
           Without this, "/owner" fell through to the "/*" catch-all below and
