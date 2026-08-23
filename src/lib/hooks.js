@@ -431,6 +431,26 @@ export function useSendOffer(spotId) {
   return { sendOffer, sending, sent }
 }
 
+// ── Owner: notification allowance ─────────────────────────────────────────────
+// One push per business per rolling 24 hours. This hook is what the dashboard
+// uses to say so up front — the real enforcement lives in the edge function,
+// since a client check can always be skipped.
+export function useOfferPushWindow(spotId) {
+  const [availableAt, setAvailableAt] = useState(null)  // null = can send now
+  const [loading,     setLoading]     = useState(true)
+
+  const check = useCallback(async () => {
+    if (!spotId) return
+    const { data } = await supabase.rpc('offer_push_available_at', { p_spot_id: spotId })
+    setAvailableAt(data || null)
+    setLoading(false)
+  }, [spotId])
+
+  useEffect(() => { check() }, [check])
+
+  return { availableAt, canPush: !availableAt, loading, refetch: check }
+}
+
 // ── Owner: currently-running offers (and ending them early) ───────────────────
 export function useLiveOffers(spotId) {
   const [offers,  setOffers]  = useState([])

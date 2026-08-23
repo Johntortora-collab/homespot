@@ -67,6 +67,25 @@ Deno.serve(async (req) => {
       return json({ error: 'That offer belongs to another business.' }, 403)
     }
 
+    // One notification per business per rolling 24 hours.
+    //
+    // Enforced HERE rather than in the dashboard because the client check is
+    // only a courtesy — anyone can call this function directly with the anon
+    // key. This is the check that actually holds.
+    const { data: availableAt, error: throttleErr } = await admin
+      .rpc('offer_push_available_at', { p_spot_id: offer.spot_id })
+    if (throttleErr) return json({ error: throttleErr.message }, 500)
+
+    if (availableAt) {
+      return json({
+        throttled: true,
+        availableAt,
+        sent: 0,
+        recipients: 0,
+        message: 'This business already sent a notification in the last 24 hours. The offer is live in the app either way.',
+      })
+    }
+
     // Who should hear about this?
     const { data: recipients, error: recErr } = await admin
       .rpc('offer_recipients', { p_spot_id: offer.spot_id, p_target: offer.target })
@@ -116,7 +135,17 @@ Deno.serve(async (req) => {
       await admin.from('push_subscriptions').delete().in('id', dead)
     }
 
+    // Only start the clock if something actually went out. A send where every
+    // endpoint was dead shouldn't burn the owner's one notification for the day.
+    if (sent > 0) {
+      await admin
+        .from('offers')
+        .update({ pushed_at: new Date().toISOString() })
+        .eq('id', offer.id)
+    }
+
     return json({
+      throttled: false,
       recipients: userIds.length,
       sent,
       failed: (subs?.length ?? 0) - sent,
