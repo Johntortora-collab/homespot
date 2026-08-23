@@ -16,6 +16,9 @@ import Privacy from './pages/Privacy'
 // Password recovery
 import ResetPassword from './pages/ResetPassword'
 
+// Draft listing preview / claim
+import SpotPreview from './pages/SpotPreview'
+
 // Admin
 import AdminTowns from './pages/AdminTowns'
 
@@ -32,9 +35,14 @@ function Router() {
   // straight to their dashboard and never get to set a new password.
   const legalRoutes = (
     <>
-      <Route path="/terms"          element={<Terms />} />
-      <Route path="/privacy"        element={<Privacy />} />
-      <Route path="/reset-password" element={<ResetPassword />} />
+      <Route path="/terms"           element={<Terms />} />
+      <Route path="/privacy"         element={<Privacy />} />
+      <Route path="/reset-password"  element={<ResetPassword />} />
+      {/* Draft listing preview. Public, and reachable in every auth state —
+          the person you're showing it to might have no account at all, and an
+          owner returning after email confirmation must land back here rather
+          than being bounced to a dashboard for a spot they haven't claimed. */}
+      <Route path="/preview/:spotId" element={<SpotPreview />} />
     </>
   )
 
