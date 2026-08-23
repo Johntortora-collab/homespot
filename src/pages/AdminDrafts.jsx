@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../lib/AuthContext'
+import PhotoUpload from '../components/PhotoUpload'
 
 const C = {
   bg:'#FDF8F2', card:'#FFFFFF', navy:'#1A1A2E',
@@ -26,6 +27,7 @@ export default function AdminDrafts() {
   const [error,   setError]   = useState('')
   const [q,       setQ]       = useState('')
   const [copied,  setCopied]  = useState(null)
+  const [copiedBoth, setCopiedBoth] = useState(null)
 
   useEffect(() => { load() }, [])
 
@@ -49,6 +51,34 @@ export default function AdminDrafts() {
     }
     setCopied(id)
     setTimeout(()=>setCopied(null), 1800)
+  }
+
+  async function setPhoto(spotId, url) {
+    const { data, error: err } = await supabase.rpc('admin_set_spot_photo', {
+      p_spot_id: spotId, p_photo_url: url,
+    })
+    if (err || !data?.ok) {
+      setError(err?.message || data?.error || 'Could not save the photo.')
+      return
+    }
+    setError('')
+    // Update in place rather than refetching — you're often on a phone with
+    // one bar, and a full reload would lose your scroll position mid-visit.
+    setRows(prev => prev.map(r => r.id === spotId ? { ...r, photo_url: url } : r))
+  }
+
+  async function copyBoth(row) {
+    const url = `${window.location.origin}/preview/${row.id}`
+    const text =
+      `Here's how ${row.name} would look on Homespot:\n${url}\n\n` +
+      `Your code to go live: ${row.claim_code}`
+    try {
+      await navigator.clipboard.writeText(text)
+    } catch {
+      window.prompt('Copy this:', text)
+    }
+    setCopiedBoth(row.id)
+    setTimeout(()=>setCopiedBoth(null), 1800)
   }
 
   if (!profile?.is_admin) return (
@@ -116,7 +146,9 @@ export default function AdminDrafts() {
         <>
           <SectionLabel>To pitch</SectionLabel>
           {open.map(r => (
-            <DraftCard key={r.id} row={r} copied={copied===r.id} onCopy={()=>copyLink(r.id)} />
+            <DraftCard key={r.id} row={r} copied={copied===r.id} onCopy={()=>copyLink(r.id)}
+              copiedBoth={copiedBoth===r.id} onCopyBoth={()=>copyBoth(r)}
+              onPhoto={url=>setPhoto(r.id, url)} />
           ))}
         </>
       )}
@@ -142,7 +174,8 @@ export default function AdminDrafts() {
   )
 }
 
-function DraftCard({ row, copied, onCopy }) {
+function DraftCard({ row, copied, onCopy, copiedBoth, onCopyBoth, onPhoto }) {
+  const [editingPhoto, setEditingPhoto] = useState(false)
   const noPhoto = !row.photo_url
 
   return (
@@ -160,23 +193,59 @@ function DraftCard({ row, copied, onCopy }) {
         </div>
       </div>
 
-      {/* No photo is worth flagging loudly — an emoji tile reads as a mockup,
-          and the pitch lands hardest when they see their own storefront. */}
-      {noPhoto && (
-        <div style={{ background:C.amberSoft, border:`1px solid ${C.amberBrd}`, borderRadius:9, padding:'8px 11px', fontSize:11.5, color:'#8A6A00', marginBottom:11, lineHeight:1.5 }}>
-          📷 No photo yet — add one before you show this
+      {/* Photo. Flagged loudly when missing — an emoji tile reads as a mockup,
+          and the pitch lands hardest when they see their own storefront. On a
+          phone the file picker offers the camera, so you can shoot the
+          storefront and upload it standing outside. */}
+      {editingPhoto ? (
+        <div style={{ marginBottom:11 }}>
+          <PhotoUpload
+            value={row.photo_url}
+            onChange={url => { onPhoto(url); if (url) setEditingPhoto(false) }}
+          />
+          <button onClick={()=>setEditingPhoto(false)}
+            style={{ background:'none', border:'none', color:C.mid, fontSize:12, cursor:'pointer', marginTop:8, fontFamily:'inherit' }}>
+            Done
+          </button>
+        </div>
+      ) : noPhoto ? (
+        <button onClick={()=>setEditingPhoto(true)}
+          style={{ width:'100%', textAlign:'left', background:C.amberSoft, border:`1px solid ${C.amberBrd}`, borderRadius:9, padding:'10px 12px', fontSize:12, color:'#8A6A00', marginBottom:11, lineHeight:1.5, cursor:'pointer', fontFamily:'inherit' }}>
+          📷 No photo yet — tap to add one before you show this
+        </button>
+      ) : (
+        <div style={{ position:'relative', marginBottom:11 }}>
+          <img src={row.photo_url} alt={row.name}
+            style={{ width:'100%', height:120, objectFit:'cover', borderRadius:10, display:'block' }}/>
+          <button onClick={()=>setEditingPhoto(true)}
+            style={{ position:'absolute', right:8, bottom:8, background:'rgba(26,26,46,0.82)', border:'none', borderRadius:8, padding:'6px 11px', fontSize:11.5, fontWeight:600, color:'#fff', cursor:'pointer', fontFamily:'inherit' }}>
+            Change photo
+          </button>
         </div>
       )}
 
-      {/* The code, big enough to read aloud from a counter. */}
-      <div style={{ background:C.bg, border:`1px dashed ${C.border}`, borderRadius:11, padding:'11px 13px', marginBottom:11, display:'flex', alignItems:'center', gap:11 }}>
-        <span style={{ fontSize:10.5, fontWeight:700, color:C.muted, letterSpacing:'0.1em', textTransform:'uppercase' }}>Code</span>
-        <span style={{ fontFamily:'monospace', fontSize:22, fontWeight:700, color:C.ink, letterSpacing:'0.14em' }}>
+      {/* Link and code as plain readable text. The buttons below are faster
+          when you have the phone in hand, but you also need to read these
+          aloud, write them on a card, or dictate them over a phone call. */}
+      <div style={{ background:C.bg, border:`1px dashed ${C.border}`, borderRadius:11, padding:'12px 13px', marginBottom:11 }}>
+        <div style={{ fontSize:10.5, fontWeight:700, color:C.muted, letterSpacing:'0.1em', textTransform:'uppercase', marginBottom:5 }}>
+          Demo link
+        </div>
+        <div style={{ fontSize:13, color:C.ink, wordBreak:'break-all', lineHeight:1.45, marginBottom:12, userSelect:'all' }}>
+          {typeof window !== 'undefined' ? window.location.host : ''}/preview/{row.id}
+        </div>
+
+        <div style={{ height:1, background:C.border, marginBottom:11 }}/>
+
+        <div style={{ fontSize:10.5, fontWeight:700, color:C.muted, letterSpacing:'0.1em', textTransform:'uppercase', marginBottom:4 }}>
+          Code to go live
+        </div>
+        <div style={{ fontFamily:'monospace', fontSize:26, fontWeight:700, color:C.ink, letterSpacing:'0.16em', userSelect:'all' }}>
           {row.claim_code}
-        </span>
+        </div>
       </div>
 
-      <div style={{ display:'flex', gap:9 }}>
+      <div style={{ display:'flex', gap:9, marginBottom:9 }}>
         <a
           href={`/preview/${row.id}`}
           target="_blank"
@@ -190,6 +259,14 @@ function DraftCard({ row, copied, onCopy }) {
           {copied ? '✓ Copied' : 'Copy link'}
         </button>
       </div>
+
+      {/* Both together, formatted to paste straight into a text or email —
+          the common case when an owner says "send it to me, I'll look tonight." */}
+      <button
+        onClick={onCopyBoth}
+        style={{ width:'100%', background:'none', border:`1px solid ${C.border}`, borderRadius:11, padding:'11px', fontSize:12.5, fontWeight:600, color: copiedBoth ? C.sage : C.mid, cursor:'pointer', fontFamily:'inherit' }}>
+        {copiedBoth ? '✓ Copied link + code' : 'Copy link + code to send'}
+      </button>
     </div>
   )
 }
