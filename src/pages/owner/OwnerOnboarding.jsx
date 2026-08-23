@@ -13,6 +13,13 @@ const C = {
 
 const CATEGORIES = ['Bakery','Coffee','Restaurant','Salon','Barbershop','Bookshop','Florist','Gym','Boutique','Auto','Pet care','Other']
 const PERK_IDEAS = ['Free coffee','Free pastry','10% off','Free dessert','$5 off','Free item of choice']
+const SPOT_TYPES = [
+  { id:'eat',  icon:'🍽️', label:'Somewhere to eat', desc:'Restaurants, cafes, bakeries, bars' },
+  { id:'do',   icon:'🎈', label:'Something to do',   desc:'Shops, studios, activities, browsing' },
+  { id:'both', icon:'✨', label:'Both',              desc:'A cafe with a bookshop, a bar with live music' },
+  { id:'none', icon:'—',  label:'Neither',           desc:"Services people seek out — you'll still be on Main Street" },
+]
+
 const EMOJIS     = ['🥐','☕','🍕','✂️','📚','🌸','💪','🎨','🛒','🐾','🔧','🏪','🍔','🍣','🧁','🌮','🍷','🎵']
 
 function Logo({ dark=false }) {
@@ -162,7 +169,7 @@ function Shell({ step, navigate, biz, withPreview, children }) {
 
 export default function OwnerOnboarding() {
   const [step, setStep]   = useState(0)
-  const [biz,  setBiz]    = useState({ firstName:'', lastName:'', email:'', password:'', name:'', category:'', tagline:'', phone:'', address:'', town:'', townId:'', emoji:'🏪', photoUrl:null, perk:'', stamps:'8' })
+  const [biz,  setBiz]    = useState({ firstName:'', lastName:'', email:'', password:'', name:'', category:'', tagline:'', phone:'', address:'', town:'', townId:'', emoji:'🏪', photoUrl:null, spotType:'', perk:'', stamps:'8' })
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
   const [awaitingConfirm, setAwaitingConfirm] = useState(false)
@@ -227,6 +234,7 @@ export default function OwnerOnboarding() {
       name:             biz.name,
       emoji:            biz.emoji,
       photo_url:        biz.photoUrl,
+      spot_type:        biz.spotType || null,
       category:         biz.category,
       tagline:          biz.tagline,
       phone:            biz.phone,
@@ -447,6 +455,21 @@ export default function OwnerOnboarding() {
 
           <Field label="One-line description" hint="Shown under your name in the app">
             <Input value={biz.tagline} onChange={v=>update('tagline',v)} placeholder="Family-owned since 1987" maxLength={50}/>
+          </Field>
+
+          <Field label="When someone asks “what should we do today?”" hint="Decides which Surprise Me button can land on you">
+            <div style={{ display:'flex', flexDirection:'column', gap:7 }}>
+              {SPOT_TYPES.map(t=>(
+                <button key={t.id} onClick={()=>update('spotType', t.id)}
+                  style={{ display:'flex', alignItems:'center', gap:11, textAlign:'left', padding:'11px 13px', borderRadius:11, background:biz.spotType===t.id?C.amberSoft:C.bg, border:`2px solid ${biz.spotType===t.id?C.amber:C.border}`, cursor:'pointer', transition:'all 0.15s' }}>
+                  <span style={{ fontSize:18, width:22, textAlign:'center', flexShrink:0 }}>{t.icon}</span>
+                  <span style={{ flex:1 }}>
+                    <span style={{ display:'block', fontSize:13.5, fontWeight:600, color:C.ink }}>{t.label}</span>
+                    <span style={{ display:'block', fontSize:11.5, color:C.muted, marginTop:1 }}>{t.desc}</span>
+                  </span>
+                </button>
+              ))}
+            </div>
           </Field>
 
           <div className="ob-field-grid">

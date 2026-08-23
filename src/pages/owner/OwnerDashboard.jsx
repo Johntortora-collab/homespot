@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect } from 'react'
 import { useAuth } from '../../lib/AuthContext'
-import { useMySpot, useDashboardStats, useRealtimeVisits, useSendOffer, useOwnerFeedback, useManageSpot, useLiveOffers, useSpotRedemptions } from '../../lib/hooks'
+import { useMySpot, useDashboardStats, useRealtimeVisits, useSendOffer, useOwnerFeedback, useManageSpot, useLiveOffers, useSpotRedemptions, useOfferPushWindow } from '../../lib/hooks'
 import { supabase } from '../../lib/supabase'
 import PhotoUpload from '../../components/PhotoUpload'
 
@@ -366,7 +366,27 @@ function SendOfferPage({ spot }) {
   const [duration, setDuration] = useState(24)   // hours; null = until ended manually
   const { sendOffer, sending, sent } = useSendOffer(spot.id)
   const { offers: liveOffers, endOffer, refetch: refetchOffers } = useLiveOffers(spot.id)
+  const { availableAt, canPush, refetch: refetchWindow } = useOfferPushWindow(spot.id)
   const [endingId, setEndingId] = useState(null)
+  const [pushResult, setPushResult] = useState(null)
+
+  // Readable "in 3h 20m" for the next allowed notification.
+  function untilNextPush() {
+    if (!availableAt) return null
+    const ms = new Date(availableAt) - Date.now()
+    if (ms <= 0) return null
+    const h = Math.floor(ms / 3600000)
+    const m = Math.floor((ms % 3600000) / 60000)
+    return h >= 1 ? `${h}h ${m}m` : `${m}m`
+  }
+
+  async function handleSend() {
+    if (!message.trim()) return
+    const { push } = await sendOffer({ message, target, durationHours: duration })
+    setPushResult(push || null)
+    refetchOffers()
+    refetchWindow()
+  }
 
   const durations = [
     { id:6,    label:'6 hours',  desc:'Flash promo' },
@@ -503,9 +523,33 @@ function SendOfferPage({ spot }) {
             </div>
           </div>
 
-          <button onClick={()=>message.trim()&&sendOffer({message,target,durationHours:duration}).then(refetchOffers)} disabled={!message.trim()||sending} style={{ background:message.trim()&&!sending?C.amber:'#E8E3DC', border:'none', borderRadius:12, padding:'14px', fontSize:14, fontWeight:600, color:message.trim()&&!sending?C.navy:C.muted, cursor:message.trim()&&!sending?'pointer':'default', transition:'all 0.2s', boxShadow:message.trim()?'0 6px 18px rgba(245,166,35,0.3)':'none' }}>
-            {sending?'Sending…':'✦ Send offer'}
+          {/* Allowance notice. The offer still posts either way — this is only
+              about whether phones buzz, so the wording has to make that clear
+              or an owner will think their offer didn't go out. */}
+          {!canPush && untilNextPush() && (
+            <div style={{ background:C.amberSoft, border:`1px solid ${C.amberBrd}`, borderRadius:11, padding:'11px 14px', fontSize:12.5, color:'#8A6A00', lineHeight:1.55, marginBottom:11 }}>
+              <strong>You've already sent today's notification.</strong> You can post this offer
+              now and customers will see it in the app — phones just won't buzz again until{' '}
+              {untilNextPush()} from now. One alert a day is what keeps people from muting you.
+            </div>
+          )}
+
+          <button onClick={handleSend} disabled={!message.trim()||sending} style={{ background:message.trim()&&!sending?C.amber:'#E8E3DC', border:'none', borderRadius:12, padding:'14px', fontSize:14, fontWeight:600, color:message.trim()&&!sending?C.navy:C.muted, cursor:message.trim()&&!sending?'pointer':'default', transition:'all 0.2s', boxShadow:message.trim()?'0 6px 18px rgba(245,166,35,0.3)':'none' }}>
+            {sending ? 'Sending…' : canPush ? '✦ Send offer + notify' : '✦ Post offer (no alert)'}
           </button>
+
+          {/* What actually happened, once it has. */}
+          {pushResult && !sending && (
+            <div style={{ marginTop:11, background: pushResult.error ? '#FEF2F2' : C.sageSoft, border:`1px solid ${pushResult.error ? '#FECACA' : C.sage+'55'}`, borderRadius:11, padding:'11px 14px', fontSize:12.5, lineHeight:1.55, color: pushResult.error ? '#DC2626' : '#3D6B27' }}>
+              {pushResult.error
+                ? `Offer posted, but notifications didn't send: ${pushResult.error}`
+                : pushResult.throttled
+                ? 'Offer is live in the app. No notification sent — already used today\'s.'
+                : pushResult.sent > 0
+                ? `Offer sent — ${pushResult.sent} ${pushResult.sent === 1 ? 'person was' : 'people were'} notified.`
+                : 'Offer is live in the app. Nobody has notifications turned on for your spot yet.'}
+            </div>
+          )}
         </div>
 
         {/* Preview */}
@@ -918,6 +962,13 @@ function PerkClaimsPage({ spot }) {
 // ── SETTINGS ──────────────────────────────────────────────────────────────────
 const EDIT_CATEGORIES = ['Bakery','Coffee','Restaurant','Salon','Barbershop','Bookshop','Florist','Gym','Boutique','Auto','Pet care','Other']
 const EDIT_PERK_IDEAS = ['Free coffee','Free pastry','10% off','Free dessert','$5 off','Free item of choice']
+const SPOT_TYPES = [
+  { id:'eat',  icon:'🍽️', label:'Somewhere to eat', desc:'Restaurants, cafes, bakeries, bars' },
+  { id:'do',   icon:'🎈', label:'Something to do',   desc:'Shops, studios, activities, browsing' },
+  { id:'both', icon:'✨', label:'Both',              desc:'A cafe with a bookshop, a bar with live music' },
+  { id:'none', icon:'—',  label:'Neither',           desc:"Services people seek out — you'll still be on Main Street" },
+]
+
 const EDIT_EMOJIS     = ['🥐','☕','🍕','✂️','📚','🌸','💪','🎨','🛒','🐾','🔧','🏪','🍔','🍣','🧁','🌮','🍷','🎵']
 
 // Owners type "rosasbakery.com" as often as the full URL, so accept both.
@@ -944,8 +995,9 @@ function SettingsPage({ spot, onSaved }) {
     name:      spot.name || '',
     emoji:     spot.emoji || '🏪',
     photo_url: spot.photo_url || null,
-    category: spot.category || '',
-    tagline:  spot.tagline || '',
+    category:  spot.category || '',
+    spot_type: spot.spot_type || 'do',
+    tagline:   spot.tagline || '',
     phone:    spot.phone || '',
     address:  spot.address || '',
     website:  spot.website || '',
@@ -1048,6 +1100,21 @@ function SettingsPage({ spot, onSaved }) {
 
         <Field label="One-line description">
           <SimpleInput value={f.tagline} onChange={v=>up('tagline',v)} placeholder="Family-owned since 1987" maxLength={50}/>
+        </Field>
+
+        <Field label="Surprise Me category" hint="Which button can land on you when someone can't decide">
+          <div style={{ display:'flex', flexDirection:'column', gap:7 }}>
+            {SPOT_TYPES.map(t=>(
+              <button key={t.id} onClick={()=>up('spot_type', t.id)}
+                style={{ display:'flex', alignItems:'center', gap:11, textAlign:'left', padding:'11px 13px', borderRadius:11, background:f.spot_type===t.id?C.amberSoft:C.bg, border:`2px solid ${f.spot_type===t.id?C.amber:C.border}`, cursor:'pointer', transition:'all 0.15s' }}>
+                <span style={{ fontSize:18, width:22, textAlign:'center', flexShrink:0 }}>{t.icon}</span>
+                <span style={{ flex:1 }}>
+                  <span style={{ display:'block', fontSize:13.5, fontWeight:600, color:C.ink }}>{t.label}</span>
+                  <span style={{ display:'block', fontSize:11.5, color:C.muted, marginTop:1 }}>{t.desc}</span>
+                </span>
+              </button>
+            ))}
+          </div>
         </Field>
 
         <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:13 }}>
