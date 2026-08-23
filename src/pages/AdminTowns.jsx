@@ -68,6 +68,13 @@ function AdminShell({ profile }) {
               )}
             </button>
           ))}
+
+          {/* A link, not a tab: the drafts sheet is its own page because it's
+              built for a phone on a sidewalk, not for this desktop layout. */}
+          <a href="/admin/drafts"
+            style={{ background:C.amberSoft, color:'#8A6A00', border:`1px solid ${C.amber}`, borderRadius:20, padding:'8px 18px', fontSize:13, fontWeight:600, display:'flex', alignItems:'center', gap:7, textDecoration:'none', marginLeft:'auto' }}>
+            📋 Drafts →
+          </a>
         </div>
       </div>
 
