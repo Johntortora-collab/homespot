@@ -2,6 +2,7 @@ import { useState, useRef, useEffect } from 'react'
 import { useAuth } from '../../lib/AuthContext'
 import { useMySpot, useDashboardStats, useRealtimeVisits, useSendOffer, useOwnerFeedback, useManageSpot, useLiveOffers, useSpotRedemptions } from '../../lib/hooks'
 import { supabase } from '../../lib/supabase'
+import PhotoUpload from '../../components/PhotoUpload'
 
 const C = {
   bg:'#FDF8F2', card:'#FFFFFF', navy:'#1A1A2E',
@@ -940,8 +941,9 @@ function normaliseWebsite(raw) {
 function SettingsPage({ spot, onSaved }) {
   const { updateSpot, deleteSpot, resetCustomerData, saving, error } = useManageSpot()
   const [f, setF] = useState({
-    name:     spot.name || '',
-    emoji:    spot.emoji || '🏪',
+    name:      spot.name || '',
+    emoji:     spot.emoji || '🏪',
+    photo_url: spot.photo_url || null,
     category: spot.category || '',
     tagline:  spot.tagline || '',
     phone:    spot.phone || '',
@@ -1021,7 +1023,11 @@ function SettingsPage({ spot, onSaved }) {
       )}
 
       <div style={{ background:C.card, border:`1px solid ${C.border}`, borderRadius:17, padding:'24px', maxWidth:580, display:'flex', flexDirection:'column', gap:18, marginBottom:20 }}>
-        <Field label="Icon">
+        <Field label="Photo" hint="Shown on Main Street and at the top of your page">
+          <PhotoUpload value={f.photo_url} onChange={url=>up('photo_url', url)} />
+        </Field>
+
+        <Field label="Icon" hint="Used on small cards and when you have no photo">
           <div style={{ display:'flex', flexWrap:'wrap', gap:7 }}>
             {EDIT_EMOJIS.map(em=>(
               <button key={em} onClick={()=>up('emoji',em)} style={{ width:38, height:38, borderRadius:9, fontSize:19, background:f.emoji===em?C.amberSoft:C.bg, border:`2px solid ${f.emoji===em?C.amber:C.border}`, cursor:'pointer', transition:'all 0.15s' }}>{em}</button>

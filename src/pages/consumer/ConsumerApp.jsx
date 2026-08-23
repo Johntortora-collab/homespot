@@ -31,6 +31,33 @@ function TownPill({ children }) {
   return <div style={{ display:'inline-flex', alignItems:'center', gap:4, background:C.amberDim, border:`1px solid ${C.amberBrd}`, borderRadius:20, padding:'3px 10px', fontFamily:'Inter,sans-serif', fontSize:10, fontWeight:600, color:C.amber, letterSpacing:'0.1em', textTransform:'uppercase', marginBottom:10 }}>{children}</div>
 }
 
+// Business photos are optional — plenty of spots will never upload one, and a
+// broken-image icon looks worse than no image at all. Every photo render goes
+// through this so the emoji fallback is consistent everywhere.
+function SpotPhoto({ spot, height, radius = 0, children }) {
+  const [failed, setFailed] = useState(false)
+  const show = spot?.photo_url && !failed
+
+  return (
+    <div style={{ position:'relative', width:'100%', height, borderRadius:radius, overflow:'hidden', background:`linear-gradient(150deg,${spot?.color||C.amber}22,${C.card2})`, flexShrink:0 }}>
+      {show ? (
+        <img
+          src={spot.photo_url}
+          alt={spot.name || ''}
+          loading="lazy"
+          onError={()=>setFailed(true)}
+          style={{ width:'100%', height:'100%', objectFit:'cover', display:'block' }}
+        />
+      ) : (
+        <div style={{ width:'100%', height:'100%', display:'flex', alignItems:'center', justifyContent:'center', fontSize:height*0.42 }}>
+          {spot?.emoji || '🏪'}
+        </div>
+      )}
+      {children}
+    </div>
+  )
+}
+
 function Label({ children }) {
   return <div style={{ fontFamily:'Inter,sans-serif', fontSize:10, fontWeight:600, color:'#555', letterSpacing:'0.1em', textTransform:'uppercase' }}>{children}</div>
 }
@@ -695,12 +722,13 @@ function MainStreet({ townId, town, cat, setCat, onSpot, onNav }) {
             )}
           </div>
         ) : filtered.map((s,i) => (
-          <div key={s.id} onClick={()=>onSpot(s.id)} style={{ background:C.card, border:`1px solid ${C.border}`, borderRadius:14, padding:12, marginBottom:9, display:'flex', gap:10, alignItems:'center', cursor:'pointer', animation:'up 0.3s ease', animationDelay:`${i*0.05}s`, animationFillMode:'both' }}>
-            <div style={{ width:4, background:s.color||C.amber, borderRadius:3, alignSelf:'stretch', flexShrink:0 }}/>
-            <div style={{ fontSize:30 }}>{s.emoji}</div>
-            <div style={{ flex:1 }}>
+          <div key={s.id} onClick={()=>onSpot(s.id)} style={{ background:C.card, border:`1px solid ${C.border}`, borderRadius:14, padding:10, marginBottom:9, display:'flex', gap:11, alignItems:'center', cursor:'pointer', animation:'up 0.3s ease', animationDelay:`${i*0.05}s`, animationFillMode:'both' }}>
+            <div style={{ width:58, flexShrink:0 }}>
+              <SpotPhoto spot={s} height={58} radius={11}/>
+            </div>
+            <div style={{ flex:1, minWidth:0 }}>
               <div style={{ fontFamily:'Fraunces,serif', fontSize:14, color:'#fff', fontWeight:600, marginBottom:2 }}>{s.name}</div>
-              <div style={{ fontSize:11, color:'#555', marginBottom:6 }}>{s.tagline}</div>
+              <div style={{ fontSize:11, color:'#555', marginBottom:6, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{s.tagline}</div>
               <div style={{ display:'flex', gap:3 }}>
                 {Array.from({length:s.stamps_required}).map((_,si)=>(
                   <div key={si} style={{ width:7, height:7, borderRadius:'50%', background:si<(s.my_stamps||0)?s.color||C.amber:C.card2, border:`1px solid ${si<(s.my_stamps||0)?s.color||C.amber:'#333'}` }}/>
@@ -833,10 +861,22 @@ function SpotDetail({ spotId, onBack, autoStamp = false, onAutoStampDone = () =>
 
   return (
     <div style={{ height:'100%', overflowY:'auto', background:C.bg, position:'relative' }}>
-      <div style={{ background:`linear-gradient(160deg,${spot.color||C.amber}28,#13131F 62%)`, padding:'14px 16px 22px' }}>
-        <button onClick={onBack} style={{ background:'rgba(255,255,255,0.08)', border:'none', color:'#fff', fontFamily:'Inter,sans-serif', fontSize:12, padding:'6px 12px', borderRadius:20, cursor:'pointer', marginBottom:8 }}>← Spots</button>
+      {/* Photo hero, when there is one. The back button floats over it; the
+          gradient at the bottom keeps the name legible against a bright photo. */}
+      {spot.photo_url && (
+        <div style={{ position:'relative' }}>
+          <SpotPhoto spot={spot} height={190}/>
+          <div style={{ position:'absolute', inset:0, background:'linear-gradient(180deg, rgba(19,19,31,0.55) 0%, rgba(19,19,31,0) 38%, rgba(19,19,31,0.92) 100%)' }}/>
+          <button onClick={onBack} style={{ position:'absolute', top:14, left:16, background:'rgba(0,0,0,0.45)', backdropFilter:'blur(6px)', border:'none', color:'#fff', fontFamily:'Inter,sans-serif', fontSize:12, padding:'7px 13px', borderRadius:20, cursor:'pointer' }}>← Spots</button>
+        </div>
+      )}
+
+      <div style={{ background:`linear-gradient(160deg,${spot.color||C.amber}28,#13131F 62%)`, padding: spot.photo_url ? '0 16px 22px' : '14px 16px 22px', marginTop: spot.photo_url ? -34 : 0, position:'relative' }}>
+        {!spot.photo_url && (
+          <button onClick={onBack} style={{ background:'rgba(255,255,255,0.08)', border:'none', color:'#fff', fontFamily:'Inter,sans-serif', fontSize:12, padding:'6px 12px', borderRadius:20, cursor:'pointer', marginBottom:8 }}>← Spots</button>
+        )}
         <div style={{ textAlign:'center', paddingTop:4 }}>
-          <div style={{ fontSize:48, marginBottom:8 }}>{spot.emoji}</div>
+          {!spot.photo_url && <div style={{ fontSize:48, marginBottom:8 }}>{spot.emoji}</div>}
           <h2 style={{ fontFamily:'Fraunces,serif', fontSize:22, color:'#fff', fontWeight:700, marginBottom:3 }}>{spot.name}</h2>
           <div style={{ fontSize:11, color:'#aaa' }}>{spot.tagline}</div>
           {site && (
@@ -1454,28 +1494,31 @@ function Surprise({ townId, town, onSpot }) {
                   <Label>{mode === 'eat' ? 'Go eat here' : 'Go check this out'}</Label>
                 </div>
 
-                <div style={{ background:'linear-gradient(150deg,#251A45,#1E1E30 62%)', border:`1px solid ${pick.color || C.amber}55`, borderRadius:20, padding:'26px 20px', textAlign:'center' }}>
-                  <div style={{ fontSize:46, marginBottom:12 }}>{pick.emoji}</div>
-                  <div style={{ fontFamily:'Fraunces,serif', fontSize:21, color:'#fff', fontWeight:700, marginBottom:5 }}>{pick.name}</div>
-                  {pick.tagline && <div style={{ fontSize:12.5, color:C.dim, lineHeight:1.55, marginBottom:10 }}>{pick.tagline}</div>}
+                <div style={{ background:'linear-gradient(150deg,#251A45,#1E1E30 62%)', border:`1px solid ${pick.color || C.amber}55`, borderRadius:20, overflow:'hidden' }}>
+                  {pick.photo_url && <SpotPhoto spot={pick} height={160}/>}
+                  <div style={{ padding:'22px 20px 20px', textAlign:'center' }}>
+                    {!pick.photo_url && <div style={{ fontSize:46, marginBottom:12 }}>{pick.emoji}</div>}
+                    <div style={{ fontFamily:'Fraunces,serif', fontSize:21, color:'#fff', fontWeight:700, marginBottom:5 }}>{pick.name}</div>
+                    {pick.tagline && <div style={{ fontSize:12.5, color:C.dim, lineHeight:1.55, marginBottom:10 }}>{pick.tagline}</div>}
 
-                  <div style={{ display:'inline-flex', alignItems:'center', gap:6, background:C.ghost, borderRadius:20, padding:'4px 11px', fontSize:10.5, color:'#888', marginBottom:6 }}>
-                    {pick.category}
-                  </div>
-
-                  {pick.latest_offer && (
-                    <div style={{ background:C.amberDim, border:`1px solid ${C.amberBrd}`, borderRadius:11, padding:'9px 12px', fontSize:11.5, color:C.amber, marginTop:10, lineHeight:1.45 }}>
-                      🔥 {pick.latest_offer}
+                    <div style={{ display:'inline-flex', alignItems:'center', gap:6, background:C.ghost, borderRadius:20, padding:'4px 11px', fontSize:10.5, color:'#888', marginBottom:6 }}>
+                      {pick.category}
                     </div>
-                  )}
 
-                  <div style={{ display:'flex', gap:9, marginTop:18 }}>
-                    <button onClick={()=>roll(mode)} style={{ flex:1, background:'none', border:`1px solid ${C.border}`, borderRadius:12, padding:'12px', fontSize:13, color:'#aaa', cursor:'pointer' }}>
-                      Try again
-                    </button>
-                    <button onClick={()=>onSpot(pick.id)} style={{ flex:1, background:C.amber, border:'none', borderRadius:12, padding:'12px', fontSize:13, fontWeight:600, color:C.bg, cursor:'pointer' }}>
-                      Take me there →
-                    </button>
+                    {pick.latest_offer && (
+                      <div style={{ background:C.amberDim, border:`1px solid ${C.amberBrd}`, borderRadius:11, padding:'9px 12px', fontSize:11.5, color:C.amber, marginTop:10, lineHeight:1.45 }}>
+                        🔥 {pick.latest_offer}
+                      </div>
+                    )}
+
+                    <div style={{ display:'flex', gap:9, marginTop:18 }}>
+                      <button onClick={()=>roll(mode)} style={{ flex:1, background:'none', border:`1px solid ${C.border}`, borderRadius:12, padding:'12px', fontSize:13, color:'#aaa', cursor:'pointer' }}>
+                        Try again
+                      </button>
+                      <button onClick={()=>onSpot(pick.id)} style={{ flex:1, background:C.amber, border:'none', borderRadius:12, padding:'12px', fontSize:13, fontWeight:600, color:C.bg, cursor:'pointer' }}>
+                        Take me there →
+                      </button>
+                    </div>
                   </div>
                 </div>
 

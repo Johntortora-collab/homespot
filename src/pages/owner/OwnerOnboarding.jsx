@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../../lib/AuthContext'
 import { useManageSpot } from '../../lib/hooks'
 import { supabase } from '../../lib/supabase'
+import PhotoUpload from '../../components/PhotoUpload'
 
 const C = {
   bg:'#FDF8F2', card:'#FFFFFF', navy:'#1A1A2E',
@@ -40,6 +41,13 @@ function SpotPreview({ biz }) {
   return (
     <div style={{ background:C.navy, borderRadius:28, padding:'18px 13px 16px', width:195, boxShadow:'0 24px 60px rgba(0,0,0,0.2)', flexShrink:0 }}>
       <div style={{ background:'#222238', borderRadius:13, padding:'11px', marginBottom:9 }}>
+        {biz.photoUrl && (
+          <img
+            src={biz.photoUrl}
+            alt=""
+            style={{ width:'100%', height:74, objectFit:'cover', borderRadius:9, display:'block', marginBottom:9 }}
+          />
+        )}
         <div style={{ display:'flex', alignItems:'center', gap:8, marginBottom:8 }}>
           <span style={{ fontSize:22 }}>{emoji}</span>
           <div>
@@ -154,7 +162,7 @@ function Shell({ step, navigate, biz, withPreview, children }) {
 
 export default function OwnerOnboarding() {
   const [step, setStep]   = useState(0)
-  const [biz,  setBiz]    = useState({ firstName:'', lastName:'', email:'', password:'', name:'', category:'', tagline:'', phone:'', address:'', town:'', townId:'', emoji:'🏪', perk:'', stamps:'8' })
+  const [biz,  setBiz]    = useState({ firstName:'', lastName:'', email:'', password:'', name:'', category:'', tagline:'', phone:'', address:'', town:'', townId:'', emoji:'🏪', photoUrl:null, perk:'', stamps:'8' })
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
   const [awaitingConfirm, setAwaitingConfirm] = useState(false)
@@ -218,6 +226,7 @@ export default function OwnerOnboarding() {
       town_id:          towns.id,
       name:             biz.name,
       emoji:            biz.emoji,
+      photo_url:        biz.photoUrl,
       category:         biz.category,
       tagline:          biz.tagline,
       phone:            biz.phone,
@@ -408,7 +417,11 @@ export default function OwnerOnboarding() {
         </div>
 
         <div style={{ background:C.card, border:`1px solid ${C.border}`, borderRadius:17, padding:'24px 26px', display:'flex', flexDirection:'column', gap:16 }}>
-          <Field label="Pick an icon">
+          <Field label="Photo" hint="Optional, but listings with a photo get noticed">
+            <PhotoUpload value={biz.photoUrl} onChange={url=>update('photoUrl', url)} />
+          </Field>
+
+          <Field label="Pick an icon" hint="Used on small cards and when you have no photo">
             <div style={{ display:'flex', flexWrap:'wrap', gap:7 }}>
               {EMOJIS.map(em=>(
                 <button key={em} onClick={()=>update('emoji',em)} style={{ width:38, height:38, borderRadius:9, fontSize:19, background:biz.emoji===em?C.amberSoft:C.bg, border:`2px solid ${biz.emoji===em?C.amber:C.border}`, cursor:'pointer', transition:'all 0.15s', transform:biz.emoji===em?'scale(1.1)':'scale(1)' }}>{em}</button>
