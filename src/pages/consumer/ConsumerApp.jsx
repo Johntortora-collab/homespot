@@ -4,6 +4,7 @@ import { useAuth } from '../../lib/AuthContext'
 import { useSpots, useStamp, useFeedback, useMyCards, useTowns, useTownRequest, useFounderStatus, useMyPerks, useClaimOffer } from '../../lib/hooks'
 import { supabase } from '../../lib/supabase'
 import QRScanner from '../../components/QRScanner'
+import NotificationToggle from '../../components/NotificationToggle'
 
 const C = {
   bg:'#13131F', card:'#1E1E30', card2:'#252538',
@@ -1633,6 +1634,8 @@ function Profile({ onSwitch, onNav }) {
             </div>
           </div>
         )}
+
+        <NotificationToggle />
 
         {items.map(([l,ic,onClick])=>(
           <div key={l} onClick={onClick} style={{ background:C.card, border:`1px solid ${C.border}`, borderRadius:12, padding:'13px 15px', marginBottom:8, display:'flex', alignItems:'center', gap:12, cursor:'pointer' }}>

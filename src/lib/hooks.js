@@ -399,15 +399,33 @@ export function useSendOffer(spotId) {
       ? new Date(Date.now() + durationHours * 3600 * 1000).toISOString()
       : null
 
-    const { error } = await supabase
+    const { data: offer, error } = await supabase
       .from('offers')
       .insert({ spot_id: spotId, message, target, expires_at, active: true })
+      .select('id')
+      .single()
+
+    // The offer is saved at this point. Push is a delivery mechanism on top of
+    // it, so a failure here is reported separately and never rolls the offer
+    // back — a sent offer that nobody was pinged about still beats losing it.
+    let push = null
+    if (!error && offer?.id) {
+      try {
+        const { data, error: pushErr } = await supabase.functions.invoke('send-offer-push', {
+          body: { offerId: offer.id },
+        })
+        push = pushErr ? { error: pushErr.message } : data
+      } catch (err) {
+        push = { error: err.message }
+      }
+    }
+
     setSending(false)
     if (!error) {
       setSent(true)
       setTimeout(() => setSent(false), 3000)
     }
-    return { error }
+    return { error, push }
   }
 
   return { sendOffer, sending, sent }
