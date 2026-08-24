@@ -68,6 +68,7 @@ function SpotPhoto({ spot, height, radius = 0, children }) {
 // they use, and the website opens in a new tab. Plain text you have to copy
 // out by hand is a dead end on a phone.
 function SpotInfo({ spot }) {
+  const site = normaliseWebsite(spot.website)
   const rows = []
 
   if (spot.address) rows.push({
