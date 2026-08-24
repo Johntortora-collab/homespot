@@ -5,6 +5,7 @@ import { useSpots, useStamp, useFeedback, useMyCards, useTowns, useTownRequest, 
 import { supabase } from '../../lib/supabase'
 import QRScanner from '../../components/QRScanner'
 import NotificationToggle from '../../components/NotificationToggle'
+import SpotsMap from '../../components/SpotsMap'
 
 const C = {
   bg:'#13131F', card:'#1E1E30', card2:'#252538',
@@ -702,6 +703,7 @@ function MainStreet({ townId, town, cat, setCat, onSpot, onNav }) {
   const { spots, loading } = useSpots(townId)
   const cats = ['All','Food','Coffee','Salon','Books','Auto','Gifts']
   const [q, setQ] = useState('')
+  const [view, setView] = useState('list')   // list | map
   const [showBanner, setShowBanner] = useState(true)
 
   // Directory, not a feed: every active business in the town, narrowed by
@@ -716,8 +718,11 @@ function MainStreet({ townId, town, cat, setCat, onSpot, onNav }) {
   const withOffers = spots.filter(s => s.latest_offer)
 
   return (
-    <div style={{ height:'100%', overflowY:'auto', background:C.bg }}>
-      <div style={{ background:'linear-gradient(160deg,#211540,#13131F 58%)', padding:'18px 18px 24px', position:'relative', overflow:'hidden' }}>
+    // Column flex so the map can claim the leftover height. In map view the
+    // page itself must NOT scroll — a scrolling container swallows the drag
+    // gestures the map needs, and panning ends up moving the page instead.
+    <div style={{ height:'100%', background:C.bg, display:'flex', flexDirection:'column', overflowY: view === 'map' ? 'hidden' : 'auto' }}>
+      <div style={{ background:'linear-gradient(160deg,#211540,#13131F 58%)', padding:'18px 18px 24px', position:'relative', overflow:'hidden', flexShrink:0 }}>
         <div style={{ position:'absolute', inset:0, backgroundImage:'radial-gradient(circle,rgba(245,166,35,0.13) 1px,transparent 1px)', backgroundSize:'18px 18px', zIndex:1 }}/>
         <div style={{ position:'relative', zIndex:2 }}>
           <TownPill>📍 {town?.name || 'Your town'}, {town?.state || ''}</TownPill>
@@ -757,6 +762,28 @@ function MainStreet({ townId, town, cat, setCat, onSpot, onNav }) {
           </div>
         </>
       )}
+
+      {/* List / Map toggle. Only shown once something is actually on the map —
+          an empty map is a worse first impression than no map at all. */}
+      {spots.some(s => Number.isFinite(s.lat) && Number.isFinite(s.lng)) && (
+        <div style={{ display:'flex', gap:6, padding:'14px 16px 0' }}>
+          {[['list','☰  List'],['map','◎  Map']].map(([id,label])=>(
+            <button key={id} onClick={()=>setView(id)}
+              style={{ flex:1, background: view===id ? C.amberDim : C.card, border:`1px solid ${view===id ? C.amberBrd : C.border}`, borderRadius:11, padding:'9px', fontSize:12.5, fontWeight:600, color: view===id ? C.amber : '#888', cursor:'pointer', fontFamily:'inherit' }}>
+              {label}
+            </button>
+          ))}
+        </div>
+      )}
+
+      {view === 'map' ? (
+        <div style={{ flex:1, minHeight:0, padding:'12px 16px 16px' }}>
+          <div style={{ height:'100%', borderRadius:16, overflow:'hidden', border:`1px solid ${C.border}` }}>
+            <SpotsMap spots={filtered} town={town} onSpot={onSpot} />
+          </div>
+        </div>
+      ) : (
+      <>
 
       {/* Search only earns its space once there's a roster worth searching. */}
       {spots.length >= 8 && (
@@ -818,6 +845,9 @@ function MainStreet({ townId, town, cat, setCat, onSpot, onNav }) {
           </div>
         ))}
       </div>
+
+      </>
+      )}
     </div>
   )
 }

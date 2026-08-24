@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../lib/AuthContext'
 import { useTowns } from '../lib/hooks'
+import { geocode } from '../lib/geocode'
 import PhotoUpload from '../components/PhotoUpload'
 
 const C = {
@@ -54,6 +55,27 @@ export default function AdminDrafts() {
     }
     setCopied(id)
     setTimeout(()=>setCopied(null), 1800)
+  }
+
+  async function placeOnMap(row) {
+    const { data: g, error: gErr } = await (async () => {
+      try {
+        return { data: await geocode({ address: row.address, town: row.town_name, state: 'NJ' }) }
+      } catch (e) {
+        return { error: e }
+      }
+    })()
+
+    if (gErr)  { setError(`Lookup failed: ${gErr.message}`); return }
+    if (!g)    { setError(`Couldn't find "${row.address}". Check the street address is right.`); return }
+
+    const { data, error: err } = await supabase.rpc('admin_set_spot_coords', {
+      p_spot_id: row.id, p_lat: g.lat, p_lng: g.lng,
+    })
+    if (err || !data?.ok) { setError(err?.message || data?.error || 'Could not save the location.'); return }
+
+    setError('')
+    setRows(prev => prev.map(r => r.id === row.id ? { ...r, lat: g.lat, lng: g.lng } : r))
   }
 
   async function deleteDraft(spotId) {
@@ -187,7 +209,8 @@ export default function AdminDrafts() {
           {open.map(r => (
             <DraftCard key={r.id} row={r} copied={copied===r.id} onCopy={()=>copyLink(r.id)}
               copiedBoth={copiedBoth===r.id} onCopyBoth={()=>copyBoth(r)}
-              onPhoto={url=>setPhoto(r.id, url)} onDelete={()=>deleteDraft(r.id)} />
+              onPhoto={url=>setPhoto(r.id, url)} onDelete={()=>deleteDraft(r.id)}
+              onPlace={()=>placeOnMap(r)} />
           ))}
         </>
       )}
@@ -213,10 +236,11 @@ export default function AdminDrafts() {
   )
 }
 
-function DraftCard({ row, copied, onCopy, copiedBoth, onCopyBoth, onPhoto, onDelete }) {
+function DraftCard({ row, copied, onCopy, copiedBoth, onCopyBoth, onPhoto, onDelete, onPlace }) {
   const [editingPhoto, setEditingPhoto] = useState(false)
   const [showQR,   setShowQR]   = useState(false)
   const [confirming, setConfirming] = useState(false)
+  const [placing, setPlacing] = useState(false)
   const noPhoto = !row.photo_url
 
   return (
@@ -230,6 +254,23 @@ function DraftCard({ row, copied, onCopy, copiedBoth, onCopyBoth, onPhoto, onDel
           </div>
           <div style={{ fontSize:12, color:C.muted, marginTop:3 }}>
             Perk on file: {row.perk}
+          </div>
+
+          {/* Geocoding is one lookup, stored once — the consumer app reads the
+              saved coordinates and never calls out to a geocoder itself. */}
+          <div style={{ marginTop:6 }}>
+            {row.lat && row.lng ? (
+              <span style={{ fontSize:11.5, color:C.sage }}>◎ On the map</span>
+            ) : row.address ? (
+              <button
+                onClick={async ()=>{ setPlacing(true); await onPlace(); setPlacing(false) }}
+                disabled={placing}
+                style={{ background:'none', border:`1px solid ${C.border}`, borderRadius:8, padding:'5px 10px', fontSize:11.5, color:C.mid, cursor:'pointer', fontFamily:'inherit' }}>
+                {placing ? 'Finding…' : '◎ Place on map'}
+              </button>
+            ) : (
+              <span style={{ fontSize:11.5, color:C.muted }}>Add an address to place it on the map</span>
+            )}
           </div>
         </div>
       </div>
