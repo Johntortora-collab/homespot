@@ -2,6 +2,7 @@ import { useState, useEffect, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../lib/AuthContext'
+import { useTowns } from '../lib/hooks'
 import PhotoUpload from '../components/PhotoUpload'
 
 const C = {
@@ -27,6 +28,8 @@ export default function AdminDrafts() {
   const [error,   setError]   = useState('')
   const [q,       setQ]       = useState('')
   const [copied,  setCopied]  = useState(null)
+  const [adding,  setAdding]  = useState(false)
+  const [justMade, setJustMade] = useState(null)
   const [copiedBoth, setCopiedBoth] = useState(null)
 
   useEffect(() => { load() }, [])
@@ -133,6 +136,32 @@ export default function AdminDrafts() {
       {error && (
         <div style={{ background:'#FEF2F2', border:'1px solid #FECACA', borderRadius:11, padding:'11px 14px', fontSize:13, color:'#DC2626', marginBottom:14 }}>
           ⚠ {error}
+        </div>
+      )}
+
+      {adding ? (
+        <NewDraftForm
+          onCancel={()=>setAdding(false)}
+          onCreated={(made)=>{ setAdding(false); setJustMade(made); load() }}
+        />
+      ) : (
+        <button onClick={()=>{ setAdding(true); setJustMade(null) }}
+          style={{ width:'100%', background:C.navy, border:'none', borderRadius:12, padding:'14px', fontSize:14, fontWeight:700, color:'#fff', cursor:'pointer', fontFamily:'inherit', marginBottom:14 }}>
+          + New draft listing
+        </button>
+      )}
+
+      {/* The code is the one thing you can't look up again from the street, so
+          it gets its own confirmation rather than just appearing in the list. */}
+      {justMade && (
+        <div style={{ background:C.sageSoft, border:`1px solid ${C.sage}55`, borderRadius:13, padding:'14px 16px', marginBottom:14 }}>
+          <div style={{ fontSize:13.5, fontWeight:700, color:'#3D6B27', marginBottom:5 }}>
+            {justMade.name} created
+          </div>
+          <div style={{ fontSize:12.5, color:'#3D6B27', lineHeight:1.55 }}>
+            Claim code <strong style={{ fontFamily:'monospace', fontSize:15, letterSpacing:'0.12em' }}>{justMade.claim_code}</strong>
+            {' '}— it's on the card below too.
+          </div>
         </div>
       )}
 
@@ -315,6 +344,166 @@ function DraftCard({ row, copied, onCopy, copiedBoth, onCopyBoth, onPhoto, onDel
           </div>
         </div>
       )}
+    </div>
+  )
+}
+
+const DRAFT_CATEGORIES = ['Bakery','Coffee','Restaurant','Salon','Barbershop','Bookshop','Florist','Gym','Boutique','Auto','Pet care','Other']
+const DRAFT_EMOJIS = ['🏪','🥐','☕','🍕','🍔','🍝','🍣','🍦','🧋','🍺','✂️','📚','🌸','💪','🎨','🛒','🐾','🔧','🎁','⛳']
+
+function NewDraftForm({ onCancel, onCreated }) {
+  const { towns } = useTowns()
+  const [f, setF] = useState({
+    name:'', category:'', emoji:'🏪', town_id:'', tagline:'',
+    perk:'Free item on us', stamps_required:'8', spot_type:'eat',
+    phone:'', address:'', hours:'', website:'',
+  })
+  const [busy, setBusy] = useState(false)
+  const [err,  setErr]  = useState('')
+  const up = (k,v) => setF(p=>({ ...p, [k]:v }))
+
+  // Only a name and a town are actually required. Everything else can be
+  // filled in later from the card — the point is to capture a business while
+  // you're standing outside it, not to complete a form.
+  const ready = f.name.trim() && f.town_id
+
+  async function create() {
+    setBusy(true); setErr('')
+    const { data, error } = await supabase.rpc('create_draft_spot', {
+      p_town_id: f.town_id,
+      p_name: f.name.trim(),
+      p_category: f.category || 'Other',
+      p_emoji: f.emoji,
+      p_tagline: f.tagline.trim() || null,
+      p_perk: f.perk.trim() || 'Free item on us',
+      p_stamps_required: parseInt(f.stamps_required, 10) || 8,
+      p_spot_type: f.spot_type,
+      p_phone: f.phone.trim() || null,
+      p_address: f.address.trim() || null,
+      p_photo_url: null,
+      p_hours: f.hours.trim() || null,
+      p_website: f.website.trim() || null,
+    })
+    setBusy(false)
+    if (error) return setErr(error.message)
+    const made = data?.[0]
+    if (!made) return setErr('Created, but no code came back — check the list below.')
+    onCreated(made)
+  }
+
+  return (
+    <div style={{ background:C.card, border:`1px solid ${C.border}`, borderRadius:15, padding:'17px 16px', marginBottom:14 }}>
+      <div style={{ fontFamily:'Fraunces,serif', fontSize:17, fontWeight:700, color:C.ink, marginBottom:14 }}>
+        New draft listing
+      </div>
+
+      <div style={{ display:'flex', flexDirection:'column', gap:12 }}>
+        <FormField label="Business name">
+          <FormInput value={f.name} onChange={v=>up('name',v)} placeholder="Rosa's Bakery" autoFocus />
+        </FormField>
+
+        <FormField label="Town">
+          <select value={f.town_id} onChange={e=>up('town_id',e.target.value)} style={fieldStyle}>
+            <option value="">Select…</option>
+            {towns.map(t=><option key={t.id} value={t.id}>{t.name}, {t.state}</option>)}
+          </select>
+        </FormField>
+
+        <FormField label="Category">
+          <select value={f.category} onChange={e=>up('category',e.target.value)} style={fieldStyle}>
+            <option value="">Select…</option>
+            {DRAFT_CATEGORIES.map(c=><option key={c} value={c}>{c}</option>)}
+          </select>
+        </FormField>
+
+        <FormField label="Surprise Me bucket">
+          <div style={{ display:'flex', gap:7 }}>
+            {[['eat','🍽️ Eat'],['do','🎈 Do'],['both','✨ Both'],['none','— Neither']].map(([id,label])=>(
+              <button key={id} onClick={()=>up('spot_type',id)}
+                style={{ flex:1, background:f.spot_type===id?C.amberSoft:C.bg, border:`2px solid ${f.spot_type===id?C.amber:C.border}`, borderRadius:9, padding:'9px 4px', fontSize:11, fontWeight:600, color:C.ink, cursor:'pointer', fontFamily:'inherit' }}>
+                {label}
+              </button>
+            ))}
+          </div>
+        </FormField>
+
+        <FormField label="Icon">
+          <div style={{ display:'flex', flexWrap:'wrap', gap:6 }}>
+            {DRAFT_EMOJIS.map(em=>(
+              <button key={em} onClick={()=>up('emoji',em)}
+                style={{ width:36, height:36, borderRadius:9, fontSize:17, background:f.emoji===em?C.amberSoft:C.bg, border:`2px solid ${f.emoji===em?C.amber:C.border}`, cursor:'pointer' }}>
+                {em}
+              </button>
+            ))}
+          </div>
+        </FormField>
+
+        <FormField label="Address">
+          <FormInput value={f.address} onChange={v=>up('address',v)} placeholder="60 Westfield Ave" />
+        </FormField>
+
+        <FormField label="Phone">
+          <FormInput value={f.phone} onChange={v=>up('phone',v)} placeholder="(732) 555-0100" type="tel" />
+        </FormField>
+
+        <FormField label="Opening hours">
+          <FormInput value={f.hours} onChange={v=>up('hours',v)} placeholder="Tue–Sat 7am–3pm, closed Mon" />
+        </FormField>
+
+        <FormField label="Website">
+          <FormInput value={f.website} onChange={v=>up('website',v)} placeholder="rosasbakery.com" />
+        </FormField>
+
+        <FormField label="One-line description">
+          <FormInput value={f.tagline} onChange={v=>up('tagline',v)} placeholder="Family-owned since 1987" maxLength={50} />
+        </FormField>
+
+        <FormField label="Placeholder reward" hint="Ask the owner what they'd actually want to give away">
+          <FormInput value={f.perk} onChange={v=>up('perk',v)} placeholder="Free coffee" maxLength={50} />
+        </FormField>
+
+        <FormField label={`Stamps to earn it: ${f.stamps_required}`}>
+          <input type="range" min={4} max={15} value={f.stamps_required}
+            onChange={e=>up('stamps_required',e.target.value)}
+            style={{ width:'100%', accentColor:C.amber }} />
+        </FormField>
+
+        {err && (
+          <div style={{ background:'#FEF2F2', border:'1px solid #FECACA', borderRadius:10, padding:'10px 13px', fontSize:12.5, color:'#DC2626' }}>
+            ⚠ {err}
+          </div>
+        )}
+
+        <div style={{ display:'flex', gap:9, marginTop:2 }}>
+          <button onClick={create} disabled={!ready||busy}
+            style={{ flex:2, background: ready&&!busy ? C.amber : '#E8E3DC', border:'none', borderRadius:11, padding:'13px', fontSize:14, fontWeight:700, color: ready&&!busy ? C.navy : C.muted, cursor: ready&&!busy ? 'pointer':'default', fontFamily:'inherit' }}>
+            {busy ? 'Creating…' : 'Create draft'}
+          </button>
+          <button onClick={onCancel}
+            style={{ flex:1, background:C.bg, border:`1px solid ${C.border}`, borderRadius:11, padding:'13px', fontSize:13.5, fontWeight:600, color:C.mid, cursor:'pointer', fontFamily:'inherit' }}>
+            Cancel
+          </button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+const fieldStyle = {
+  width:'100%', background:C.bg, border:`1px solid ${C.border}`, borderRadius:10,
+  padding:'11px 13px', fontSize:14.5, color:C.ink, fontFamily:'inherit', outline:'none',
+}
+
+function FormInput({ value, onChange, ...rest }) {
+  return <input value={value} onChange={e=>onChange(e.target.value)} style={fieldStyle} {...rest} />
+}
+
+function FormField({ label, hint, children }) {
+  return (
+    <div>
+      <label style={{ display:'block', fontSize:12.5, fontWeight:600, color:C.mid, marginBottom:6 }}>{label}</label>
+      {children}
+      {hint && <div style={{ fontSize:11.5, color:C.muted, marginTop:5 }}>{hint}</div>}
     </div>
   )
 }
