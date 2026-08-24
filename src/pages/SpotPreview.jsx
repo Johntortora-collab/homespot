@@ -165,7 +165,16 @@ export default function SpotPreview() {
           <div style={{ padding:'18px 18px 20px' }}>
             <div style={{ fontFamily:'Fraunces,serif', fontSize:19, color:'#fff', fontWeight:700 }}>{spot.name}</div>
             {spot.tagline && <div style={{ fontSize:12.5, color:C.dim, marginTop:3 }}>{spot.tagline}</div>}
-            {spot.address && <div style={{ fontSize:11.5, color:'#555', marginTop:6 }}>📍 {spot.address}</div>}
+
+            {/* The practical details, shown the way a customer would see them.
+                An owner checks their own hours and phone number first — a wrong
+                one is the fastest way to lose confidence in the whole thing. */}
+            <div style={{ marginTop:10, display:'flex', flexDirection:'column', gap:5 }}>
+              {spot.address && <InfoLine icon="📍">{spot.address}</InfoLine>}
+              {spot.hours   && <InfoLine icon="🕒">{spot.hours}</InfoLine>}
+              {spot.phone   && <InfoLine icon="📞">{spot.phone}</InfoLine>}
+              {spot.website && <InfoLine icon="🔗">{spot.website}</InfoLine>}
+            </div>
 
             <div style={{ height:1, background:C.border, margin:'16px 0' }}/>
 
@@ -272,6 +281,15 @@ export default function SpotPreview() {
         )}
       </div>
       <Keyframes/>
+    </div>
+  )
+}
+
+function InfoLine({ icon, children }) {
+  return (
+    <div style={{ display:'flex', gap:8, alignItems:'flex-start', fontSize:11.5, color:'#8A8AA0', lineHeight:1.45 }}>
+      <span style={{ flexShrink:0 }}>{icon}</span>
+      <span>{children}</span>
     </div>
   )
 }

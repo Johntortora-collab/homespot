@@ -1,6 +1,8 @@
 import { useState, useMemo } from 'react'
 import { useAuth } from '../lib/AuthContext'
 import { useAdminTowns, useAdminSpots, useIsAdmin, useAdminOverview, useAdminUsers, useAdminOffers, useAdminFeedback } from '../lib/hooks'
+import PhotoUpload from '../components/PhotoUpload'
+import { supabase } from '../lib/supabase'
 
 const C = {
   bg:'#FDF8F2', card:'#FFFFFF', navy:'#1A1A2E',
@@ -358,10 +360,24 @@ function BusinessForm({ spot, towns, onCancel, onSave }) {
     tagline: spot?.tagline || '',
     perk: spot?.perk || '',
     stamps_required: String(spot?.stamps_required ?? 8),
+    hours: spot?.hours || '',
   })
   const [saving, setSaving] = useState(false)
   const [err, setErr] = useState('')
+  const [photo, setPhoto] = useState(spot?.photo_url || null)
   const up = (k,v) => setF(p=>({ ...p, [k]:v }))
+
+  // Photo goes through its own RPC rather than the main save: admin_update_spot
+  // has a fixed parameter list that predates the column, and a draft has no
+  // owner so the owner-scoped update path can't reach it either.
+  async function savePhoto(url) {
+    setPhoto(url)
+    if (!spot?.id) return   // creating — nothing to attach it to yet
+    const { data, error } = await supabase.rpc('admin_set_spot_photo', {
+      p_spot_id: spot.id, p_photo_url: url,
+    })
+    if (error || !data?.ok) setErr(error?.message || data?.error || 'Could not save the photo.')
+  }
   const ready = f.name.trim() && f.category && f.town_id && f.perk.trim()
 
   async function save() {
@@ -377,6 +393,18 @@ function BusinessForm({ spot, towns, onCancel, onSave }) {
       <h1 style={{ fontFamily:'Fraunces,serif', fontSize:26, fontWeight:700, marginBottom:20 }}>{spot ? 'Edit business' : 'Add a business'}</h1>
 
       <div style={{ background:C.card, border:`1px solid ${C.border}`, borderRadius:16, padding:'22px', display:'flex', flexDirection:'column', gap:16 }}>
+        <div>
+          <label style={{ fontSize:12.5, fontWeight:600, color:C.mid, display:'block', marginBottom:7 }}>Photo</label>
+          {spot?.id ? (
+            <PhotoUpload value={photo} onChange={savePhoto} />
+          ) : (
+            <div style={{ background:C.bg, border:`1px dashed ${C.border}`, borderRadius:11, padding:'14px', fontSize:12.5, color:C.muted, lineHeight:1.55 }}>
+              Create the business first, then reopen it here to add a photo.
+            </div>
+          )}
+          <div style={{ fontSize:11.5, color:C.muted, marginTop:6 }}>Saves immediately — separate from the button below.</div>
+        </div>
+
         <div>
           <label style={{ fontSize:12.5, fontWeight:600, color:C.mid, display:'block', marginBottom:7 }}>Icon</label>
           <div style={{ display:'flex', flexWrap:'wrap', gap:7 }}>
@@ -401,6 +429,7 @@ function BusinessForm({ spot, towns, onCancel, onSave }) {
           </FormRow>
         </div>
         <FormRow label="One-line description"><input value={f.tagline} onChange={e=>up('tagline',e.target.value)} placeholder="Family-owned since 1987" maxLength={50} style={inp}/></FormRow>
+        <FormRow label="Opening hours"><input value={f.hours} onChange={e=>up('hours',e.target.value)} placeholder="Tue–Sat 7am–3pm, closed Mon" maxLength={120} style={inp}/></FormRow>
         <FormRow label={`Stamps for a reward: ${f.stamps_required}`}>
           <input type="range" min={4} max={15} value={f.stamps_required} onChange={e=>up('stamps_required',e.target.value)} style={{ width:'100%', accentColor:C.amber }}/>
         </FormRow>
