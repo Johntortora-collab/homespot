@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../lib/AuthContext'
@@ -51,6 +51,16 @@ export default function AdminDrafts() {
     }
     setCopied(id)
     setTimeout(()=>setCopied(null), 1800)
+  }
+
+  async function deleteDraft(spotId) {
+    const { data, error: err } = await supabase.rpc('admin_delete_draft', { p_spot_id: spotId })
+    if (err || !data?.ok) {
+      setError(err?.message || data?.error || 'Could not delete that listing.')
+      return
+    }
+    setError('')
+    setRows(prev => prev.filter(r => r.id !== spotId))
   }
 
   async function setPhoto(spotId, url) {
@@ -148,7 +158,7 @@ export default function AdminDrafts() {
           {open.map(r => (
             <DraftCard key={r.id} row={r} copied={copied===r.id} onCopy={()=>copyLink(r.id)}
               copiedBoth={copiedBoth===r.id} onCopyBoth={()=>copyBoth(r)}
-              onPhoto={url=>setPhoto(r.id, url)} />
+              onPhoto={url=>setPhoto(r.id, url)} onDelete={()=>deleteDraft(r.id)} />
           ))}
         </>
       )}
@@ -174,8 +184,10 @@ export default function AdminDrafts() {
   )
 }
 
-function DraftCard({ row, copied, onCopy, copiedBoth, onCopyBoth, onPhoto }) {
+function DraftCard({ row, copied, onCopy, copiedBoth, onCopyBoth, onPhoto, onDelete }) {
   const [editingPhoto, setEditingPhoto] = useState(false)
+  const [showQR,   setShowQR]   = useState(false)
+  const [confirming, setConfirming] = useState(false)
   const noPhoto = !row.photo_url
 
   return (
@@ -264,8 +276,96 @@ function DraftCard({ row, copied, onCopy, copiedBoth, onCopyBoth, onPhoto }) {
           the common case when an owner says "send it to me, I'll look tonight." */}
       <button
         onClick={onCopyBoth}
-        style={{ width:'100%', background:'none', border:`1px solid ${C.border}`, borderRadius:11, padding:'11px', fontSize:12.5, fontWeight:600, color: copiedBoth ? C.sage : C.mid, cursor:'pointer', fontFamily:'inherit' }}>
+        style={{ width:'100%', background:'none', border:`1px solid ${C.border}`, borderRadius:11, padding:'11px', fontSize:12.5, fontWeight:600, color: copiedBoth ? C.sage : C.mid, cursor:'pointer', fontFamily:'inherit', marginBottom:9 }}>
         {copiedBoth ? '✓ Copied link + code' : 'Copy link + code to send'}
+      </button>
+
+      <div style={{ display:'flex', gap:9 }}>
+        <button
+          onClick={()=>setShowQR(v=>!v)}
+          style={{ flex:1, background:'none', border:`1px solid ${C.border}`, borderRadius:11, padding:'11px', fontSize:12.5, fontWeight:600, color:C.mid, cursor:'pointer', fontFamily:'inherit' }}>
+          {showQR ? 'Hide QR' : '▣ Show QR'}
+        </button>
+        <button
+          onClick={()=>setConfirming(true)}
+          style={{ background:'none', border:`1px solid ${C.border}`, borderRadius:11, padding:'11px 15px', fontSize:12.5, color:C.muted, cursor:'pointer', fontFamily:'inherit' }}>
+          Delete
+        </button>
+      </div>
+
+      {/* Hold the phone up, they scan it with their camera — no typing a UUID
+          across a counter, which is the whole reason this exists. */}
+      {showQR && <DraftQR spotId={row.id} name={row.name} code={row.claim_code} />}
+
+      {confirming && (
+        <div style={{ marginTop:11, background:'#FEF2F2', border:'1px solid #FECACA', borderRadius:11, padding:'13px 14px' }}>
+          <div style={{ fontSize:12.5, color:'#991B1B', lineHeight:1.55, marginBottom:11 }}>
+            Delete the draft for <strong>{row.name}</strong>? This can't be undone — you'd have to
+            recreate it and the code would change.
+          </div>
+          <div style={{ display:'flex', gap:9 }}>
+            <button onClick={()=>{ setConfirming(false); onDelete() }}
+              style={{ flex:1, background:'#DC2626', border:'none', borderRadius:10, padding:'11px', fontSize:12.5, fontWeight:700, color:'#fff', cursor:'pointer', fontFamily:'inherit' }}>
+              Yes, delete
+            </button>
+            <button onClick={()=>setConfirming(false)}
+              style={{ flex:1, background:C.card, border:`1px solid ${C.border}`, borderRadius:10, padding:'11px', fontSize:12.5, fontWeight:600, color:C.mid, cursor:'pointer', fontFamily:'inherit' }}>
+              Cancel
+            </button>
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}
+
+function DraftQR({ spotId, name, code }) {
+  const canvasRef = useRef(null)
+  const url = `${window.location.origin}/preview/${spotId}`
+
+  // Same settings as the counter stickers: margin 4 is the spec minimum (iOS
+  // won't lock on below it) and the light colour must be OPAQUE white, not
+  // transparent, or contrast collapses against a dark background.
+  useEffect(() => {
+    if (!canvasRef.current) return
+    import('qrcode').then(QRCode => {
+      QRCode.toCanvas(canvasRef.current, url, {
+        width: 320,
+        margin: 4,
+        color: { dark:'#000000', light:'#FFFFFFFF' },
+        errorCorrectionLevel: 'M',
+      })
+    })
+  }, [url])
+
+  function download() {
+    import('qrcode').then(QRCode => {
+      const c = document.createElement('canvas')
+      QRCode.toCanvas(c, url, {
+        width: 1400, margin: 4,
+        color: { dark:'#000000', light:'#FFFFFFFF' },
+        errorCorrectionLevel: 'M',
+      }, () => {
+        const a = document.createElement('a')
+        a.download = `homespot-preview-${name.toLowerCase().replace(/[^a-z0-9]+/g,'-')}.png`
+        a.href = c.toDataURL('image/png')
+        a.click()
+      })
+    })
+  }
+
+  return (
+    <div style={{ marginTop:11, background:'#fff', border:`1px solid ${C.border}`, borderRadius:12, padding:'16px', textAlign:'center' }}>
+      <canvas ref={canvasRef} style={{ width:200, height:200, maxWidth:'100%' }} />
+      <div style={{ fontSize:12, color:C.mid, marginTop:8, lineHeight:1.5 }}>
+        Point their camera at this to open the demo
+      </div>
+      <div style={{ fontFamily:'monospace', fontSize:15, fontWeight:700, color:C.ink, letterSpacing:'0.14em', marginTop:6 }}>
+        {code}
+      </div>
+      <button onClick={download}
+        style={{ background:'none', border:`1px solid ${C.border}`, borderRadius:9, padding:'8px 14px', fontSize:12, fontWeight:600, color:C.mid, cursor:'pointer', fontFamily:'inherit', marginTop:11 }}>
+        ↓ Download for print
       </button>
     </div>
   )
