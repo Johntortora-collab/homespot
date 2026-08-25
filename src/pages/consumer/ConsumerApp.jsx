@@ -361,7 +361,9 @@ export default function ConsumerApp() {
         {/* Status bar (desktop preview only — real phones already show their own) */}
         {!noChrome && (
           <div className="hs-statusbar" style={{ height:44, background:C.bg, display:'flex', alignItems:'center', justifyContent:'space-between', padding:'0 20px', flexShrink:0 }}>
-            <span style={{ fontSize:11, color:'#fff', opacity:0.5 }}>9:41</span>
+            {/* The hardcoded "9:41" that used to sit here was mockup dressing —
+                a frozen fake clock that looked broken to anyone who noticed it. */}
+            <span style={{ width:18 }} />
             <Logo size={18}/>
             {/* sign-out removed — to be rebuilt */}
           </div>
