@@ -22,11 +22,22 @@ import SpotPreview from './pages/SpotPreview'
 // Admin
 import AdminTowns from './pages/AdminTowns'
 import AdminDrafts from './pages/AdminDrafts'
+import Splash from './components/Splash'
 
 function Router() {
   const { session, profile, loading } = useAuth()
 
-  if (loading) return <Loader />
+  // The splash sits ON TOP of the routes rather than instead of them, so it can
+  // fade out over the real screen. It removes itself once the fade finishes.
+  return (
+    <>
+      <Splash done={!loading} />
+      {loading ? null : <Screens session={session} profile={profile} />}
+    </>
+  )
+}
+
+function Screens({ session, profile }) {
 
   // Always reachable regardless of auth state.
   //
@@ -157,6 +168,9 @@ function OwnSpotNotice({ spotName }) {
   )
 }
 
+// Every existing <Loader /> call site now gets the branded splash. `done` stays
+// false while this is mounted — the router unmounts it the moment auth resolves,
+// so the fade only matters for the brief overlap.
 function Loader() {
   return (
     <div style={{ minHeight:'100vh', display:'flex', alignItems:'center', justifyContent:'center', background:'#13131F' }}>
