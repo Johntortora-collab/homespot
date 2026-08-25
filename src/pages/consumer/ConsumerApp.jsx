@@ -67,6 +67,12 @@ function SpotPhoto({ spot, height, radius = 0, children }) {
 // Every row is a real link: tel: dials, a maps query opens whatever map app
 // they use, and the website opens in a new tab. Plain text you have to copy
 // out by hand is a dead end on a phone.
+// "about 2 km away" beats "1,983m away" when you're deciding whether to walk.
+function formatDistance(m) {
+  if (m < 1000) return `${Math.round(m / 10) * 10} m away`
+  return `${(m / 1000).toFixed(1)} km away`
+}
+
 function SpotInfo({ spot }) {
   const site = normaliseWebsite(spot.website)
   const rows = []
@@ -921,6 +927,7 @@ function SpotDetail({ spotId, onBack, autoStamp = false, onAutoStampDone = () =>
   // stamp immediately, once the spot has loaded. The ref guard keeps this from
   // double-firing under React StrictMode's double-invoked effects.
   const autoStampFired = useRef(false)
+  const [stampBlocked, setStampBlocked] = useState(null)
   useEffect(() => {
     if (!autoStamp || !spot || autoStampFired.current) return
     autoStampFired.current = true
@@ -930,11 +937,31 @@ function SpotDetail({ spotId, onBack, autoStamp = false, onAutoStampDone = () =>
 
   async function applyStamp() {
     if (!spot || stamping) return
-    const { perkEarned: earned, alreadyScanned } = await addStamp(spot.id)
+    const { perkEarned: earned, alreadyScanned, reason, distanceM } = await addStamp(spot.id)
 
     if (alreadyScanned) {
       setShowAlreadyScanned(true)
       setTimeout(() => setShowAlreadyScanned(false), 2600)
+      return
+    }
+
+    // A refusal has to SAY something. Someone standing at a counter with a
+    // phone that did nothing will assume the app is broken and stop using it —
+    // so every rejection reason gets its own plain-language message.
+    if (reason) {
+      setStampBlocked(
+        reason === 'need_location'
+          ? { title:'Location needed',
+              body:"Homespot checks you're actually at the business before adding a stamp. Turn on location for this site and scan again." }
+        : reason === 'too_far'
+          ? { title:"You're not there yet",
+              body:`This looks like it's about ${distanceM ? formatDistance(distanceM) : 'a way'} from ${spot.name}. Stamps only count at the counter.` }
+        : reason === 'own_spot'
+          ? { title:'That\'s your own spot',
+              body:"You can't collect stamps at a business registered to your account." }
+        : { title:'Couldn\'t add that stamp',
+            body:'Something went wrong. Try scanning again in a moment.' }
+      )
       return
     }
 
@@ -1092,6 +1119,21 @@ function SpotDetail({ spotId, onBack, autoStamp = false, onAutoStampDone = () =>
           {scanMismatch && (
             <div style={{ marginTop:12, background:'rgba(232,85,85,0.12)', border:'1px solid rgba(232,85,85,0.3)', borderRadius:12, padding:'10px 14px', fontSize:12, color:'#E88585', animation:'up 0.3s ease', display:'inline-flex', alignItems:'center', gap:7 }}>
               <span>⚠</span> That QR belongs to a different spot
+            </div>
+          )}
+          {/* Given room to explain rather than a one-line toast: these are the
+              cases where a customer needs to DO something (allow location, walk
+              over), and a message that vanishes in two seconds doesn't help. */}
+          {stampBlocked && (
+            <div style={{ marginTop:12, background:'rgba(232,149,109,0.1)', border:'1px solid rgba(232,149,109,0.35)', borderRadius:14, padding:'13px 15px', textAlign:'left', animation:'up 0.3s ease' }}>
+              <div style={{ fontFamily:'Fraunces,serif', fontSize:14, color:'#E8956D', fontWeight:700, marginBottom:5 }}>
+                {stampBlocked.title}
+              </div>
+              <div style={{ fontSize:12, color:C.dim, lineHeight:1.55 }}>{stampBlocked.body}</div>
+              <button onClick={()=>setStampBlocked(null)}
+                style={{ background:'none', border:'none', color:'#666', fontSize:11.5, cursor:'pointer', marginTop:9, padding:0, fontFamily:'inherit' }}>
+                Dismiss
+              </button>
             </div>
           )}
         </div>

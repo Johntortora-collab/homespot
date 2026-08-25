@@ -67,93 +67,52 @@ function makeCode() {
 }
 
 export function useStamp() {
-  const { session } = useAuth()
   const [loading, setLoading] = useState(false)
   const [error,   setError]   = useState(null)
+
+  // Ask the browser where we are, but never block on it for long. A phone that
+  // can't get a fix in 8 seconds usually can't get one at all, and leaving a
+  // customer staring at a spinner at the counter is worse than the server
+  // telling them plainly that it needs a location.
+  function getPosition() {
+    return new Promise(resolve => {
+      if (!navigator.geolocation) return resolve(null)
+      navigator.geolocation.getCurrentPosition(
+        pos => resolve({ lat: pos.coords.latitude, lng: pos.coords.longitude }),
+        () => resolve(null),          // denied or unavailable — let the server decide
+        { enableHighAccuracy: true, timeout: 8000, maximumAge: 30000 }
+      )
+    })
+  }
 
   async function addStamp(spotId) {
     setLoading(true)
     setError(null)
 
     try {
-      // 0. Check if this user already scanned this spot today
-      const todayStart = new Date()
-      todayStart.setHours(0, 0, 0, 0)
+      const pos = await getPosition()
 
-      const { data: todayVisit } = await supabase
-        .from('visits')
-        .select('id')
-        .eq('user_id', session.user.id)
-        .eq('spot_id', spotId)
-        .gte('created_at', todayStart.toISOString())
-        .maybeSingle()
+      // Everything that matters now happens server-side: the day limit, the
+      // owner check, the distance check, and the card update. The browser only
+      // reports where it thinks it is.
+      const { data, error: rpcErr } = await supabase.rpc('claim_stamp', {
+        p_spot_id: spotId,
+        p_lat: pos?.lat ?? null,
+        p_lng: pos?.lng ?? null,
+      })
 
-      if (todayVisit) {
-        setLoading(false)
-        return { perkEarned: false, alreadyScanned: true }
-      }
+      if (rpcErr) throw rpcErr
 
-      // 1. Insert visit row
-      const { error: visitErr } = await supabase
-        .from('visits')
-        .insert({ user_id: session.user.id, spot_id: spotId })
-
-      if (visitErr) {
-        // 23505 = unique constraint violation — race condition backstop
-        if (visitErr.code === '23505') {
-          setLoading(false)
-          return { perkEarned: false, alreadyScanned: true }
+      if (!data?.ok) {
+        return {
+          perkEarned: false,
+          alreadyScanned: data?.reason === 'already_today',
+          reason: data?.reason,
+          distanceM: data?.distance_m,
         }
-        throw visitErr
       }
 
-      // 2. Upsert stamp card (increment stamps)
-      const { data: existing } = await supabase
-        .from('stamp_cards')
-        .select('id, stamps, lifetime')
-        .eq('user_id', session.user.id)
-        .eq('spot_id', spotId)
-        .single()
-
-      // Get spot to know the required stamps + what the perk actually is
-      const { data: spot } = await supabase
-        .from('spots')
-        .select('stamps_required, perk')
-        .eq('id', spotId)
-        .single()
-
-      const currentStamps  = existing?.stamps  ?? 0
-      const currentLifetime = existing?.lifetime ?? 0
-      const newStamps = (currentStamps + 1) >= spot.stamps_required ? 0 : currentStamps + 1
-      // Reset to 0 when card is complete (perk earned)
-      const perkEarned = currentStamps + 1 >= spot.stamps_required
-
-      if (existing) {
-        await supabase
-          .from('stamp_cards')
-          .update({ stamps: newStamps, lifetime: currentLifetime + 1 })
-          .eq('id', existing.id)
-      } else {
-        await supabase
-          .from('stamp_cards')
-          .insert({ user_id: session.user.id, spot_id: spotId, stamps: 1, lifetime: 1 })
-      }
-
-      // Card just completed → record the earned perk so it isn't forgotten the
-      // moment the card resets. reward_text is snapshotted here on purpose: if
-      // the owner later changes their perk, whoever already earned the old one
-      // still gets the old one.
-      if (perkEarned) {
-        await supabase.from('redemptions').insert({
-          user_id:     session.user.id,
-          spot_id:     spotId,
-          type:        'stamp_card',
-          reward_text: spot.perk || 'Your reward',
-          code:        makeCode(),
-        })
-      }
-
-      return { perkEarned }
+      return { perkEarned: !!data.perk_earned, stamps: data.stamps }
     } catch (err) {
       setError(err.message)
       return { perkEarned: false, error: err }
@@ -165,7 +124,6 @@ export function useStamp() {
   return { addStamp, loading, error }
 }
 
-// ── Submit feedback ───────────────────────────────────────────────────────────
 export function useFeedback() {
   const { session } = useAuth()
 
