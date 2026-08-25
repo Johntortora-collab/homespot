@@ -4,6 +4,7 @@ import { supabase } from '../lib/supabase'
 import { useAuth } from '../lib/AuthContext'
 import { useTowns } from '../lib/hooks'
 import { geocode } from '../lib/geocode'
+import { printFlyers } from '../lib/flyer'
 import PhotoUpload from '../components/PhotoUpload'
 
 const C = {
@@ -55,6 +56,15 @@ export default function AdminDrafts() {
     }
     setCopied(id)
     setTimeout(()=>setCopied(null), 1800)
+  }
+
+  async function print(rows) {
+    try {
+      await printFlyers(rows, window.location.origin)
+      setError('')
+    } catch (e) {
+      setError(e.message)
+    }
   }
 
   async function placeOnMap(row) {
@@ -205,12 +215,18 @@ export default function AdminDrafts() {
 
       {open.length > 0 && (
         <>
-          <SectionLabel>To pitch</SectionLabel>
+          <div style={{ display:'flex', alignItems:'center', gap:12, margin:'20px 0 10px' }}>
+            <span style={{ fontSize:11, fontWeight:700, color:C.muted, letterSpacing:'0.1em', textTransform:'uppercase' }}>To pitch</span>
+            <button onClick={()=>print(open)}
+              style={{ marginLeft:'auto', background:'none', border:`1px solid ${C.border}`, borderRadius:9, padding:'6px 11px', fontSize:11.5, fontWeight:600, color:C.mid, cursor:'pointer', fontFamily:'inherit' }}>
+              ⎙ Print all {open.length}
+            </button>
+          </div>
           {open.map(r => (
             <DraftCard key={r.id} row={r} copied={copied===r.id} onCopy={()=>copyLink(r.id)}
               copiedBoth={copiedBoth===r.id} onCopyBoth={()=>copyBoth(r)}
               onPhoto={url=>setPhoto(r.id, url)} onDelete={()=>deleteDraft(r.id)}
-              onPlace={()=>placeOnMap(r)} />
+              onPlace={()=>placeOnMap(r)} onPrint={()=>print(r)} />
           ))}
         </>
       )}
@@ -236,7 +252,7 @@ export default function AdminDrafts() {
   )
 }
 
-function DraftCard({ row, copied, onCopy, copiedBoth, onCopyBoth, onPhoto, onDelete, onPlace }) {
+function DraftCard({ row, copied, onCopy, copiedBoth, onCopyBoth, onPhoto, onDelete, onPlace, onPrint }) {
   const [editingPhoto, setEditingPhoto] = useState(false)
   const [showQR,   setShowQR]   = useState(false)
   const [confirming, setConfirming] = useState(false)
@@ -355,6 +371,11 @@ function DraftCard({ row, copied, onCopy, copiedBoth, onCopyBoth, onPhoto, onDel
           onClick={()=>setShowQR(v=>!v)}
           style={{ flex:1, background:'none', border:`1px solid ${C.border}`, borderRadius:11, padding:'11px', fontSize:12.5, fontWeight:600, color:C.mid, cursor:'pointer', fontFamily:'inherit' }}>
           {showQR ? 'Hide QR' : '▣ Show QR'}
+        </button>
+        <button
+          onClick={onPrint}
+          style={{ flex:1, background:'none', border:`1px solid ${C.border}`, borderRadius:11, padding:'11px', fontSize:12.5, fontWeight:600, color:C.mid, cursor:'pointer', fontFamily:'inherit' }}>
+          ⎙ Flyer
         </button>
         <button
           onClick={()=>setConfirming(true)}
