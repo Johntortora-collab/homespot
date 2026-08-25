@@ -1639,7 +1639,7 @@ function Surprise({ townId, town, onSpot }) {
       <div style={{ padding:'20px 16px 4px' }}>
         <TownPill>{town?.name || 'Your town'}</TownPill>
         <h2 style={{ fontFamily:'Fraunces,serif', fontSize:24, color:'#fff', marginTop:6 }}>
-          Surprise <span style={{ color:'#7BA05B', fontStyle:'italic' }}>me</span>
+          Spot <span style={{ color:'#7BA05B', fontStyle:'italic' }}>Me</span>
         </h2>
         <p style={{ fontSize:12, color:'#555', marginTop:4 }}>Can't decide? Let Homespot pick.</p>
       </div>
@@ -1780,7 +1780,7 @@ function Profile({ onSwitch, onNav }) {
       : []),
     ['My Spots','🗂', () => onNav('perks','perks')],
     ['Main Street','🏘️', () => onNav('home','home')],
-    ['Surprise Me','🎲', () => onNav('surprise','surprise')],
+    ['Spot Me','🎲', () => onNav('surprise','surprise')],
     ['Invite Friends','💌', handleInvite],
     ['Account & Security','⚙', () => onNav('account','profile')],
   ]
@@ -1872,7 +1872,7 @@ function Nav({ tab, onTab, onScan }) {
     {id:'home',     label:'Main St',  icon:'🏘️', sc:'home'},
     {id:'perks',    label:'My Spots', icon:'✦',  sc:'perks'},
     {id:'scan',     label:'',         icon:'⬡',  sc:null, center:true},
-    {id:'surprise', label:'Surprise', icon:'🎲', sc:'surprise'},
+    {id:'surprise', label:'Spot Me', icon:'🎲', sc:'surprise'},
     {id:'profile',  label:'You',      icon:'◎',  sc:'profile'},
   ]
   return (

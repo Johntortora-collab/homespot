@@ -478,7 +478,7 @@ function NewDraftForm({ onCancel, onCreated }) {
           </select>
         </FormField>
 
-        <FormField label="Surprise Me bucket">
+        <FormField label="Spot Me bucket">
           <div style={{ display:'flex', gap:7 }}>
             {[['eat','🍽️ Eat'],['do','🎈 Do'],['both','✨ Both'],['none','— Neither']].map(([id,label])=>(
               <button key={id} onClick={()=>up('spot_type',id)}

@@ -457,7 +457,7 @@ export default function OwnerOnboarding() {
             <Input value={biz.tagline} onChange={v=>update('tagline',v)} placeholder="Family-owned since 1987" maxLength={50}/>
           </Field>
 
-          <Field label="When someone asks “what should we do today?”" hint="Decides which Surprise Me button can land on you">
+          <Field label="When someone asks “what should we do today?”" hint="Decides which Spot Me button can land on you">
             <div style={{ display:'flex', flexDirection:'column', gap:7 }}>
               {SPOT_TYPES.map(t=>(
                 <button key={t.id} onClick={()=>update('spotType', t.id)}
