@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect, useRef, useMemo } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { useAuth } from '../../lib/AuthContext'
 import { useSpots, useStamp, useFeedback, useMyCards, useTowns, useTownRequest, useFounderStatus, useMyPerks, useClaimOffer } from '../../lib/hooks'
@@ -36,6 +36,30 @@ function TownPill({ children }) {
 // Business photos are optional — plenty of spots will never upload one, and a
 // broken-image icon looks worse than no image at all. Every photo render goes
 // through this so the emoji fallback is consistent everywhere.
+// Counts are the point: "Restaurant 9" tells you what the town is made of
+// before you tap anything, which is exactly what a directory should do.
+function Chip({ label, count, active, onClick }) {
+  return (
+    <button onClick={onClick}
+      style={{
+        display:'inline-flex', alignItems:'center', gap:6,
+        background: active ? C.amber : C.card2,
+        color: active ? C.bg : '#aaa',
+        fontFamily:'Inter,sans-serif', fontSize:11, fontWeight: active ? 600 : 400,
+        padding:'5px 11px 5px 13px', borderRadius:20, border:'none',
+        cursor:'pointer', whiteSpace:'nowrap', flexShrink:0,
+      }}>
+      {label}
+      <span style={{
+        fontSize:9.5, fontWeight:600,
+        background: active ? 'rgba(19,19,31,0.18)' : 'rgba(255,255,255,0.07)',
+        color: active ? C.bg : '#777',
+        borderRadius:9, padding:'1px 5px', minWidth:15, textAlign:'center',
+      }}>{count}</span>
+    </button>
+  )
+}
+
 function SpotPhoto({ spot, height, radius = 0, children }) {
   const [failed, setFailed] = useState(false)
   const show = spot?.photo_url && !failed
@@ -708,7 +732,25 @@ function SignupScreen({ town, authMode, setAuthMode, onSignup, onSignIn, onBack 
 // ── HOME ──────────────────────────────────────────────────────────────────────
 function MainStreet({ townId, town, cat, setCat, onSpot, onNav }) {
   const { spots, loading } = useSpots(townId)
-  const cats = ['All','Food','Coffee','Salon','Books','Auto','Gifts']
+  // Built from what's actually in the town, not a guessed list. The old
+  // hardcoded chips included 'Food', 'Books' and 'Gifts' — none of which are
+  // real category values (they're 'Restaurant', 'Bookshop', 'Boutique'), so
+  // three of the six filters silently returned nothing.
+  //
+  // Deriving them means a chip can never point at an empty result, the counts
+  // are honest, and adding a category to onboarding needs no change here.
+  const cats = useMemo(() => {
+    const counts = new Map()
+    spots.forEach(s => {
+      const c = s.category?.trim()
+      if (c) counts.set(c, (counts.get(c) || 0) + 1)
+    })
+    return [...counts.entries()]
+      // Busiest first — in a town that's mostly restaurants, burying
+      // "Restaurant" under alphabetical order helps nobody.
+      .sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))
+      .map(([name, n]) => ({ name, n }))
+  }, [spots])
   const [q, setQ] = useState('')
   const [view, setView] = useState('list')   // list | map
   const [showBanner, setShowBanner] = useState(true)
@@ -723,6 +765,10 @@ function MainStreet({ townId, town, cat, setCat, onSpot, onNav }) {
       || s.tagline?.toLowerCase().includes(needle)
       || s.category?.toLowerCase().includes(needle))
   const withOffers = spots.filter(s => s.latest_offer)
+
+  useEffect(() => {
+    if (cat !== 'All' && !loading && !cats.some(c => c.name === cat)) setCat('All')
+  }, [cat, cats, loading, setCat])
 
   return (
     // Column flex so the map can claim the leftover height. In map view the
@@ -808,11 +854,16 @@ function MainStreet({ townId, town, cat, setCat, onSpot, onNav }) {
         </div>
       )}
 
-      <div style={{ display:'flex', gap:8, padding:'16px 16px 0', overflowX:'auto' }}>
-        {cats.map(c=>(
-          <button key={c} onClick={()=>setCat(c)} style={{ background:c===cat?C.amber:C.card2, color:c===cat?C.bg:'#aaa', fontFamily:'Inter,sans-serif', fontSize:11, fontWeight:c===cat?600:400, padding:'5px 13px', borderRadius:20, border:'none', cursor:'pointer', whiteSpace:'nowrap', flexShrink:0 }}>{c}</button>
-        ))}
-      </div>
+      {/* One category isn't a filter, it's a label — hide the row entirely
+          rather than showing a chip that can only ever do nothing. */}
+      {cats.length > 1 && (
+        <div style={{ display:'flex', gap:8, padding:'16px 16px 0', overflowX:'auto' }}>
+          <Chip label="All" count={spots.length} active={cat==='All'} onClick={()=>setCat('All')} />
+          {cats.map(c=>(
+            <Chip key={c.name} label={c.name} count={c.n} active={cat===c.name} onClick={()=>setCat(c.name)} />
+          ))}
+        </div>
+      )}
 
       <div style={{ padding:'12px 16px 100px' }}>
         {loading ? (
