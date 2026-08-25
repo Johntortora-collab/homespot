@@ -783,7 +783,21 @@ export function useAdminUsers() {
     return { error }
   }
 
-  return { users, loading, setRole, refetch: fetchUsers }
+  async function deleteUser(userId) {
+    const { data, error } = await supabase.rpc('admin_delete_user', { p_user_id: userId })
+    if (error)    return { error: error.message }
+    if (!data?.ok) return { error: data?.error || 'Could not delete that account.' }
+    await fetchUsers()
+    return { error: null }
+  }
+
+  async function previewDelete(userId) {
+    const { data, error } = await supabase.rpc('admin_user_delete_preview', { p_user_id: userId })
+    if (error || !data?.ok) return null
+    return data
+  }
+
+  return { users, loading, setRole, deleteUser, previewDelete, refetch: fetchUsers }
 }
 
 export function useAdminOffers() {

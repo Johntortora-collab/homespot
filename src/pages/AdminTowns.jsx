@@ -711,11 +711,13 @@ function OverviewPanel() {
 
 // ── USERS ─────────────────────────────────────────────────────────────────────
 function UsersPanel() {
-  const { users, loading, setRole } = useAdminUsers()
+  const { users, loading, setRole, deleteUser, previewDelete } = useAdminUsers()
   const [q, setQ] = useState('')
   const [busyId, setBusyId] = useState(null)
   const [role, setRoleFilter] = useState('all')   // all | consumer | owner | admin
   const [sort, setSort] = useState('newest')      // newest | oldest | name | scans
+  const [confirming, setConfirming] = useState(null)   // { user, preview }
+  const [delErr, setDelErr] = useState('')
 
   const rows = users || []
 
@@ -745,6 +747,23 @@ function UsersPanel() {
     })
     return out
   }, [rows, q, role, sort])
+
+  // Ask the database what's attached BEFORE showing the confirm. "Delete this
+  // user" reads very differently once you know it takes 47 visits with it.
+  async function askDelete(u) {
+    setDelErr('')
+    const preview = await previewDelete(u.id)
+    setConfirming({ user: u, preview })
+  }
+
+  async function doDelete() {
+    const u = confirming.user
+    setBusyId(u.id)
+    const { error } = await deleteUser(u.id)
+    setBusyId(null)
+    setConfirming(null)
+    if (error) setDelErr(error)
+  }
 
   async function toggleRole(u) {
     setBusyId(u.id)
@@ -798,6 +817,49 @@ function UsersPanel() {
         </select>
       </div>
 
+      {delErr && (
+        <div style={{ background:'#FEF2F2', border:'1px solid #FECACA', borderRadius:11, padding:'11px 14px', fontSize:13, color:'#DC2626', marginBottom:14, lineHeight:1.5 }}>
+          ⚠ {delErr}
+        </div>
+      )}
+
+      {confirming && (
+        <div style={{ position:'fixed', inset:0, background:'rgba(19,19,31,0.55)', display:'flex', alignItems:'center', justifyContent:'center', padding:20, zIndex:100 }}>
+          <div style={{ background:C.card, borderRadius:16, padding:'22px 24px', maxWidth:420, width:'100%' }}>
+            <div style={{ fontFamily:'Fraunces,serif', fontSize:19, fontWeight:700, marginBottom:9 }}>
+              Delete this account?
+            </div>
+            <div style={{ fontSize:13.5, color:C.mid, lineHeight:1.6, marginBottom:14 }}>
+              <strong style={{ color:C.ink }}>{confirming.user.full_name || confirming.user.email || 'This user'}</strong>
+              {confirming.user.email ? ` (${confirming.user.email})` : ''} will be permanently removed.
+              They can sign up again, but nothing below comes back.
+            </div>
+
+            {confirming.preview && (
+              <div style={{ background:C.bg, borderRadius:11, padding:'12px 14px', fontSize:13, color:C.mid, lineHeight:1.7, marginBottom:16 }}>
+                Also deleted:<br/>
+                · {confirming.preview.visits} visit{confirming.preview.visits === 1 ? '' : 's'}<br/>
+                · {confirming.preview.cards} stamp card{confirming.preview.cards === 1 ? '' : 's'}
+                {confirming.preview.spots > 0 && (
+                  <><br/><span style={{ color:'#DC2626' }}>· owns {confirming.preview.spots} business listing(s) — this will be refused</span></>
+                )}
+              </div>
+            )}
+
+            <div style={{ display:'flex', gap:9 }}>
+              <button onClick={doDelete} disabled={busyId===confirming.user.id}
+                style={{ flex:1, background:'#DC2626', border:'none', borderRadius:11, padding:'12px', fontSize:13.5, fontWeight:700, color:'#fff', cursor:'pointer' }}>
+                {busyId===confirming.user.id ? 'Deleting…' : 'Delete permanently'}
+              </button>
+              <button onClick={()=>setConfirming(null)}
+                style={{ flex:1, background:C.bg, border:`1px solid ${C.border}`, borderRadius:11, padding:'12px', fontSize:13.5, fontWeight:600, color:C.mid, cursor:'pointer' }}>
+                Cancel
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {loading ? <div style={{ color:C.muted }}>Loading…</div> : (
         <>
           <div style={{ fontSize:12, color:C.muted, marginBottom:8 }}>
@@ -822,6 +884,11 @@ function UsersPanel() {
                   title={u.is_admin ? "Can't change an admin's role here" : ''}
                   style={{ background:'none', border:`1px solid ${C.border}`, borderRadius:9, padding:'7px 12px', fontSize:12, fontWeight:600, color: u.is_admin ? C.muted : C.navy, cursor: u.is_admin ? 'default' : 'pointer', flexShrink:0 }}>
                   {busyId===u.id ? '…' : u.role==='owner' ? 'Make customer' : 'Make owner'}
+                </button>
+                <button onClick={()=>askDelete(u)} disabled={busyId===u.id || u.is_admin}
+                  title={u.is_admin ? "Remove admin access before deleting" : 'Delete this account'}
+                  style={{ background:'none', border:`1px solid ${C.border}`, borderRadius:9, padding:'7px 11px', fontSize:12, color: u.is_admin ? C.border : '#DC2626', cursor: u.is_admin ? 'default' : 'pointer', flexShrink:0 }}>
+                  Delete
                 </button>
               </div>
             ))}
