@@ -121,6 +121,11 @@ export default function ImageCropper({
   // Scale at which the image exactly covers the frame.
   const baseScale =
     nat && frame.w && frame.h ? Math.max(frame.w / nat.w, frame.h / nat.h) : 1;
+  // Scale at which the WHOLE image is visible inside the frame. Expressed as a
+  // zoom value, so 1 = fills the frame and minZoom = nothing cropped off.
+  const fitScale =
+    nat && frame.w && frame.h ? Math.min(frame.w / nat.w, frame.h / nat.h) : 1;
+  const minZoom = baseScale ? fitScale / baseScale : 1;
   const scale = baseScale * crop.zoom;
   const dispW = nat ? nat.w * scale : 0;
   const dispH = nat ? nat.h * scale : 0;
@@ -129,19 +134,20 @@ export default function ImageCropper({
   const clampCrop = useCallback(
     (next) => {
       if (!nat || !frame.w || !frame.h) return next;
-      const s = baseScale * next.zoom;
+      const z = clamp(next.zoom, minZoom, MAX_ZOOM);
+      const s = baseScale * z;
       const w = nat.w * s;
       const h = nat.h * s;
       // Half the frame, expressed as a fraction of the displayed image.
       const marginX = w > frame.w ? frame.w / 2 / w : 0.5;
       const marginY = h > frame.h ? frame.h / 2 / h : 0.5;
       return {
-        zoom: next.zoom,
+        zoom: z,
         x: clamp(next.x, marginX, 1 - marginX),
         y: clamp(next.y, marginY, 1 - marginY),
       };
     },
-    [nat, frame.w, frame.h, baseScale]
+    [nat, frame.w, frame.h, baseScale, minZoom]
   );
 
   // Re-clamp whenever the frame is measured or the image changes.
@@ -207,7 +213,7 @@ export default function ImageCropper({
     if (status !== "ready") return;
     e.preventDefault();
     const factor = e.deltaY < 0 ? 1.08 : 1 / 1.08;
-    setCrop((c) => clampCrop({ ...c, zoom: clamp(c.zoom * factor, 1, MAX_ZOOM) }));
+    setCrop((c) => clampCrop({ ...c, zoom: clamp(c.zoom * factor, minZoom, MAX_ZOOM) }));
   };
 
   // Arrow keys nudge, +/- zoom. Keeps the editor usable without a mouse.
@@ -228,37 +234,64 @@ export default function ImageCropper({
       setCrop((c) => clampCrop({ ...c, x: c.x - (m.x || 0), y: c.y - (m.y || 0) }));
     } else if (e.key === "+" || e.key === "=") {
       e.preventDefault();
-      setCrop((c) => clampCrop({ ...c, zoom: clamp(c.zoom * 1.12, 1, MAX_ZOOM) }));
+      setCrop((c) => clampCrop({ ...c, zoom: clamp(c.zoom * 1.12, minZoom, MAX_ZOOM) }));
     } else if (e.key === "-" || e.key === "_") {
       e.preventDefault();
-      setCrop((c) => clampCrop({ ...c, zoom: clamp(c.zoom / 1.12, 1, MAX_ZOOM) }));
+      setCrop((c) => clampCrop({ ...c, zoom: clamp(c.zoom / 1.12, minZoom, MAX_ZOOM) }));
     }
   };
 
   // ── Export ────────────────────────────────────────────────────────────────
+  // Draws exactly what the frame shows, rather than cutting a rectangle out of
+  // the source. That distinction matters once zooming out is allowed: the
+  // visible region can extend past the edges of the image, which a source-rect
+  // crop cannot express.
   const buildBlob = () =>
     new Promise((resolve, reject) => {
       const img = imgRef.current;
-      if (!img || !nat) return reject(new Error("Image not ready"));
+      if (!img || !nat || !frame.w) return reject(new Error("Image not ready"));
 
-      // How much of the ORIGINAL image is visible inside the frame.
-      const srcW = frame.w / scale;
-      const srcH = frame.h / scale;
-      const srcX = clamp(crop.x * nat.w - srcW / 2, 0, Math.max(0, nat.w - srcW));
-      const srcY = clamp(crop.y * nat.h - srcH / 2, 0, Math.max(0, nat.h - srcH));
-
-      // Never upscale past the original resolution.
-      const outW = Math.round(Math.min(outputWidth, srcW));
+      // Cap the export so the sharp layer is never upscaled beyond the original.
+      const maxUseful = (frame.w * nat.w) / dispW;
+      const outW = Math.max(320, Math.round(Math.min(outputWidth, maxUseful)));
       const outH = Math.round(outW / aspect);
+      const k = outW / frame.w; // display px → output px
 
       const canvas = document.createElement("canvas");
       canvas.width = outW;
       canvas.height = outH;
       const ctx = canvas.getContext("2d");
       ctx.imageSmoothingQuality = "high";
-      ctx.fillStyle = "#000";
+
+      ctx.fillStyle = "#12121C";
       ctx.fillRect(0, 0, outW, outH);
-      ctx.drawImage(img, srcX, srcY, srcW, srcH, 0, 0, outW, outH);
+
+      // Backdrop: the same photo blown up to cover, blurred. Only visible when
+      // zoomed out far enough to expose space around the image — far nicer than
+      // black bars, and it keeps the cover the right shape everywhere it renders.
+      const coverScale = Math.max(outW / nat.w, outH / nat.h);
+      const bw = nat.w * coverScale;
+      const bh = nat.h * coverScale;
+      try {
+        ctx.save();
+        ctx.filter = `blur(${Math.round(outW * 0.03)}px)`;
+        // Overdraw the edges so the blur doesn't feather into the background.
+        ctx.drawImage(
+          img,
+          (outW - bw) / 2 - outW * 0.06,
+          (outH - bh) / 2 - outH * 0.06,
+          bw + outW * 0.12,
+          bh + outH * 0.12
+        );
+        ctx.restore();
+        ctx.fillStyle = "rgba(0,0,0,0.18)";
+        ctx.fillRect(0, 0, outW, outH);
+      } catch {
+        // Canvas filter unsupported — the flat fill above stands in.
+      }
+
+      // Sharp layer, positioned exactly as on screen.
+      ctx.drawImage(img, left * k, top * k, dispW * k, dispH * k);
 
       canvas.toBlob(
         (blob) => {
@@ -346,7 +379,8 @@ export default function ImageCropper({
               marginTop: 4,
             }}
           >
-            Drag to reposition. Pinch or use the slider to zoom.
+            Drag to reposition. Zoom out past the left end to fit the whole
+            photo in.
           </div>
         </div>
 
@@ -374,6 +408,25 @@ export default function ImageCropper({
               userSelect: "none",
             }}
           >
+            {status === "ready" && nat && (
+              <img
+                src={src}
+                alt=""
+                aria-hidden="true"
+                draggable={false}
+                style={{
+                  position: "absolute",
+                  inset: 0,
+                  width: "100%",
+                  height: "100%",
+                  objectFit: "cover",
+                  filter: "blur(18px) brightness(0.82)",
+                  transform: "scale(1.15)",
+                  pointerEvents: "none",
+                }}
+              />
+            )}
+
             {status === "ready" && nat && (
               <img
                 src={src}
@@ -425,12 +478,14 @@ export default function ImageCropper({
             gap: 12,
           }}
         >
-          <span style={{ ...labelStyle, width: 38 }}>Zoom</span>
+          <span style={{ ...labelStyle, width: 38 }}>
+            {crop.zoom < 0.999 ? "Fit" : "Zoom"}
+          </span>
           <input
             type="range"
-            min={1}
+            min={minZoom}
             max={MAX_ZOOM}
-            step={0.01}
+            step={0.005}
             value={crop.zoom}
             disabled={status !== "ready"}
             onChange={(e) =>
