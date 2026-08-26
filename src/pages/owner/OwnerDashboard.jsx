@@ -995,6 +995,8 @@ function SettingsPage({ spot, onSaved }) {
     name:      spot.name || '',
     emoji:     spot.emoji || '🏪',
     photo_url: spot.photo_url || null,
+    photo_original_url: spot.photo_original_url || null,
+    photo_crop: spot.photo_crop || null,
     category:  spot.category || '',
     spot_type: spot.spot_type || 'do',
     hours:     spot.hours || '',
@@ -1076,8 +1078,18 @@ function SettingsPage({ spot, onSaved }) {
       )}
 
       <div style={{ background:C.card, border:`1px solid ${C.border}`, borderRadius:17, padding:'24px', maxWidth:580, display:'flex', flexDirection:'column', gap:18, marginBottom:20 }}>
-        <Field label="Photo" hint="Shown on Main Street and at the top of your page">
-          <PhotoUpload value={f.photo_url} onChange={url=>up('photo_url', url)} />
+        <Field label="Photo" hint="Shown on Main Street and at the top of your page. Use Adjust to re-frame it any time.">
+          <PhotoUpload
+            value={f.photo_url}
+            originalValue={f.photo_original_url}
+            crop={f.photo_crop}
+            onChange={(url, meta) => setF(p => ({
+              ...p,
+              photo_url:          url,
+              photo_original_url: meta?.original_url ?? null,
+              photo_crop:         meta?.crop ?? null,
+            }))}
+          />
         </Field>
 
         <Field label="Icon" hint="Used on small cards and when you have no photo">
