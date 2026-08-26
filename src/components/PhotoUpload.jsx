@@ -1,13 +1,14 @@
 import { useRef, useState, useEffect } from 'react'
 import { supabase } from '../lib/supabase'
 import ImageCropper from './ImageCropper'
+import { PHOTO_ASPECT } from '../lib/photo'
 
 const BUCKET = 'spot-photos'
 
-// Frame the cover is cropped to. This MUST match how the consumer app renders
-// a spot hero — if they disagree, the browser crops a second time on top of
-// yours and the framing you chose gets cut again. 4/3 is the safe default.
-export const PHOTO_ASPECT = 4 / 3
+// Frame the cover is cropped to. Defined in lib/photo.js so the consumer app
+// renders spot heroes at exactly the same ratio. Re-exported for callers that
+// already import it from here.
+export { PHOTO_ASPECT }
 
 const COVER_EDGE      = 1400  // px wide, the file customers download
 const COVER_QUALITY   = 0.82

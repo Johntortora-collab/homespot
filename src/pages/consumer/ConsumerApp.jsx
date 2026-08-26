@@ -6,6 +6,7 @@ import { supabase } from '../../lib/supabase'
 import QRScanner from '../../components/QRScanner'
 import NotificationToggle from '../../components/NotificationToggle'
 import SpotsMap from '../../components/SpotsMap'
+import { PHOTO_ASPECT } from '../../lib/photo'
 
 const C = {
   bg:'#13131F', card:'#1E1E30', card2:'#252538',
@@ -60,12 +61,18 @@ function Chip({ label, count, active, onClick }) {
   )
 }
 
-function SpotPhoto({ spot, height, radius = 0, children }) {
+// Photos can be sized two ways. `height` fixes the pixel height and lets the
+// ratio float with the viewport — right for the small square thumbnail.
+// `aspect` pins the ratio instead, which is what the hero needs: the owner
+// framed their photo to a specific shape in the crop editor, and a floating
+// ratio would crop it a second time on top of that.
+function SpotPhoto({ spot, height, aspect, radius = 0, children }) {
   const [failed, setFailed] = useState(false)
   const show = spot?.photo_url && !failed
+  const fallbackSize = height ? height * 0.42 : 46
 
   return (
-    <div style={{ position:'relative', width:'100%', height, borderRadius:radius, overflow:'hidden', background:`linear-gradient(150deg,${spot?.color||C.amber}22,${C.card2})`, flexShrink:0 }}>
+    <div style={{ position:'relative', width:'100%', height, aspectRatio: aspect ? String(aspect) : undefined, borderRadius:radius, overflow:'hidden', background:`linear-gradient(150deg,${spot?.color||C.amber}22,${C.card2})`, flexShrink:0 }}>
       {show ? (
         <img
           src={spot.photo_url}
@@ -75,7 +82,7 @@ function SpotPhoto({ spot, height, radius = 0, children }) {
           style={{ width:'100%', height:'100%', objectFit:'cover', display:'block' }}
         />
       ) : (
-        <div style={{ width:'100%', height:'100%', display:'flex', alignItems:'center', justifyContent:'center', fontSize:height*0.42 }}>
+        <div style={{ width:'100%', height:'100%', display:'flex', alignItems:'center', justifyContent:'center', fontSize:fallbackSize }}>
           {spot?.emoji || '🏪'}
         </div>
       )}
@@ -1055,7 +1062,7 @@ function SpotDetail({ spotId, onBack, autoStamp = false, onAutoStampDone = () =>
           gradient at the bottom keeps the name legible against a bright photo. */}
       {spot.photo_url && (
         <div style={{ position:'relative' }}>
-          <SpotPhoto spot={spot} height={190}/>
+          <SpotPhoto spot={spot} aspect={PHOTO_ASPECT}/>
           <div style={{ position:'absolute', inset:0, background:'linear-gradient(180deg, rgba(19,19,31,0.55) 0%, rgba(19,19,31,0) 38%, rgba(19,19,31,0.92) 100%)' }}/>
           <button onClick={onBack} style={{ position:'absolute', top:14, left:16, background:'rgba(0,0,0,0.45)', backdropFilter:'blur(6px)', border:'none', color:'#fff', fontFamily:'Inter,sans-serif', fontSize:12, padding:'7px 13px', borderRadius:20, cursor:'pointer' }}>← Spots</button>
         </div>
@@ -1706,7 +1713,7 @@ function Surprise({ townId, town, onSpot }) {
                 </div>
 
                 <div style={{ background:'linear-gradient(150deg,#251A45,#1E1E30 62%)', border:`1px solid ${pick.color || C.amber}55`, borderRadius:20, overflow:'hidden' }}>
-                  {pick.photo_url && <SpotPhoto spot={pick} height={160}/>}
+                  {pick.photo_url && <SpotPhoto spot={pick} aspect={PHOTO_ASPECT}/>}
                   <div style={{ padding:'22px 20px 20px', textAlign:'center' }}>
                     {!pick.photo_url && <div style={{ fontSize:46, marginBottom:12 }}>{pick.emoji}</div>}
                     <div style={{ fontFamily:'Fraunces,serif', fontSize:21, color:'#fff', fontWeight:700, marginBottom:5 }}>{pick.name}</div>
