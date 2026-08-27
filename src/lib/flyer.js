@@ -9,6 +9,10 @@
  * Printed rather than emailed on purpose — you rarely get an email address at
  * the door, and a piece of paper by the register survives longer than a message
  * in a shared inbox.
+ *
+ * Type is sized and weighted for paper, not screen. Inkjets and older office
+ * lasers wash out mid-greys badly, so body copy sits at #262626 with a 500
+ * weight rather than the lighter greys that look fine in a browser preview.
  */
 
 const QR_OPTS = {
@@ -40,7 +44,7 @@ function pageHtml({ name, code, qr, url, town }) {
     <h1 class="title">Your listing for<br><em>${esc(name)}</em> is ready.</h1>
 
     <p class="lede">
-      Homespot is a local directory — a free listing where neighbours find the
+      Homespot is a local directory — a free listing where neighbors find the
       businesses around them. We've already built yours. Scan to see it.
     </p>
 
@@ -102,49 +106,54 @@ const STYLES = `
   }
   .sheet {
     width: 8.5in; height: 11in;
-    padding: 0.7in 0.75in;
+    padding: 0.62in 0.7in;
     display: flex; flex-direction: column;
     page-break-after: always;
   }
   .sheet:last-child { page-break-after: auto; }
 
   .head { display:flex; align-items:baseline; justify-content:space-between;
-          border-bottom: 2px solid #1A1A2E; padding-bottom: 10px; }
-  .mark { font-size: 23px; font-weight: 800; letter-spacing: -0.02em; }
-  .mark span { color: #C77F0A; }
-  .kicker { font-size: 11px; letter-spacing: 0.16em; text-transform: uppercase; color: #6B7280; }
+          border-bottom: 2.5px solid #1A1A2E; padding-bottom: 10px; }
+  .mark { font-size: 25px; font-weight: 800; letter-spacing: -0.02em; }
+  .mark span { color: #B87209; }
+  .kicker { font-size: 12px; font-weight: 700; letter-spacing: 0.14em;
+            text-transform: uppercase; color: #3F3F46; }
 
-  .title { font-size: 34px; line-height: 1.14; font-weight: 800; margin-top: 30px; letter-spacing: -0.02em; }
-  .title em { font-style: italic; color: #C77F0A; }
+  .title { font-size: 35px; line-height: 1.14; font-weight: 800; margin-top: 26px; letter-spacing: -0.02em; }
+  .title em { font-style: italic; color: #B87209; }
 
-  .lede { font-size: 13.5px; line-height: 1.6; color: #4B5563; margin-top: 13px; max-width: 5.6in; }
+  .lede { font-size: 15px; font-weight: 500; line-height: 1.52; color: #262626;
+          margin-top: 13px; max-width: 5.8in; }
 
-  .scanbox { display: flex; gap: 26px; align-items: center; margin-top: 26px;
-             border: 2px solid #1A1A2E; border-radius: 12px; padding: 20px 22px; }
+  .scanbox { display: flex; gap: 26px; align-items: center; margin-top: 24px;
+             border: 2.5px solid #1A1A2E; border-radius: 12px; padding: 20px 22px; }
   .qr { width: 1.85in; height: 1.85in; display: block; flex-shrink: 0; }
   .scanside { flex: 1; min-width: 0; }
-  .scanlabel { font-size: 15px; font-weight: 700; }
-  .scanurl { font-size: 10.5px; color: #6B7280; margin-top: 3px; word-break: break-all; }
+  .scanlabel { font-size: 17px; font-weight: 800; }
+  .scanurl { font-size: 11.5px; font-weight: 500; color: #3F3F46; margin-top: 4px; word-break: break-all; }
 
-  .codebox { margin-top: 14px; border: 1.5px dashed #9CA3AF; border-radius: 9px; padding: 10px 13px; }
-  .codelabel { font-size: 9.5px; letter-spacing: 0.13em; text-transform: uppercase; color: #6B7280; }
-  .code { font-family: 'Courier New', monospace; font-size: 27px; font-weight: 700; letter-spacing: 0.16em; margin-top: 2px; }
-  .codenote { font-size: 11px; color: #4B5563; line-height: 1.5; margin-top: 10px; }
+  .codebox { margin-top: 13px; border: 2px dashed #6B7280; border-radius: 9px; padding: 10px 13px; }
+  .codelabel { font-size: 10.5px; font-weight: 700; letter-spacing: 0.12em;
+               text-transform: uppercase; color: #3F3F46; }
+  .code { font-family: 'Courier New', monospace; font-size: 30px; font-weight: 700;
+          letter-spacing: 0.16em; margin-top: 3px; }
+  .codenote { font-size: 12.5px; font-weight: 500; color: #262626; line-height: 1.45; margin-top: 10px; }
 
-  .cols { display: flex; gap: 20px; margin-top: 30px; }
+  .cols { display: flex; gap: 20px; margin-top: 28px; }
   .col { flex: 1; }
-  .colhead { font-size: 13px; font-weight: 700; padding-bottom: 6px; margin-bottom: 7px;
-             border-bottom: 1.5px solid #C77F0A; }
-  .col p { font-size: 11.5px; line-height: 1.55; color: #4B5563; }
+  .colhead { font-size: 15px; font-weight: 800; padding-bottom: 6px; margin-bottom: 8px;
+             border-bottom: 2px solid #B87209; }
+  .col p { font-size: 13px; font-weight: 500; line-height: 1.48; color: #262626; }
 
-  .strip { margin-top: auto; display: flex; gap: 18px; background: #F5F2ED;
-           border-radius: 10px; padding: 14px 16px; }
-  .stripitem { flex: 1; font-size: 11px; line-height: 1.5; color: #4B5563; }
-  .stripitem strong { color: #1A1A2E; display: block; font-size: 12.5px; margin-bottom: 2px; }
+  .strip { margin-top: auto; display: flex; gap: 18px; background: #F0EBE3;
+           border-radius: 10px; padding: 15px 17px; }
+  .stripitem { flex: 1; font-size: 12.5px; font-weight: 500; line-height: 1.45; color: #262626; }
+  .stripitem strong { color: #1A1A2E; display: block; font-size: 14px; font-weight: 800; margin-bottom: 3px; }
 
-  .foot { margin-top: 16px; padding-top: 11px; border-top: 1px solid #E8E3DC;
-          font-size: 10px; color: #6B7280; display: flex; justify-content: space-between; gap: 16px; }
-  .footurl { color: #9CA3AF; }
+  .foot { margin-top: 15px; padding-top: 11px; border-top: 1.5px solid #C9C2B8;
+          font-size: 11.5px; font-weight: 500; color: #3F3F46;
+          display: flex; justify-content: space-between; gap: 16px; }
+  .footurl { color: #6B7280; }
 `
 
 /**
