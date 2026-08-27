@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../lib/AuthContext'
+import SpotDemo from '../components/SpotDemo'
 
 const C = {
   bg:'#13131F', card:'#1E1E30', card2:'#252538',
@@ -191,6 +192,10 @@ export default function SpotPreview() {
             </div>
           </div>
         </div>
+
+        {/* The walkthrough. Only worth their time while the listing is still a
+            pitch — once claimed, they have the real app and this is noise. */}
+        {stage === 'preview' && <SpotDemo spot={spot} />}
 
         {/* What they actually get */}
         <div style={{ background:C.card, border:`1px solid ${C.border}`, borderRadius:16, padding:'16px 18px', marginBottom:18 }}>
