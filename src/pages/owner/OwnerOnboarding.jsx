@@ -169,7 +169,7 @@ function Shell({ step, navigate, biz, withPreview, children }) {
 
 export default function OwnerOnboarding() {
   const [step, setStep]   = useState(0)
-  const [biz,  setBiz]    = useState({ firstName:'', lastName:'', email:'', password:'', name:'', category:'', tagline:'', phone:'', address:'', town:'', townId:'', emoji:'🏪', photoUrl:null, spotType:'', perk:'', stamps:'8' })
+  const [biz,  setBiz]    = useState({ firstName:'', lastName:'', email:'', password:'', name:'', category:'', tagline:'', phone:'', address:'', town:'', townId:'', emoji:'🏪', photoUrl:null, photoOriginalUrl:null, photoCrop:null, photoAspect:'wide', spotType:'', perk:'', stamps:'8' })
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
   const [awaitingConfirm, setAwaitingConfirm] = useState(false)
@@ -233,7 +233,10 @@ export default function OwnerOnboarding() {
       town_id:          towns.id,
       name:             biz.name,
       emoji:            biz.emoji,
-      photo_url:        biz.photoUrl,
+      photo_url:          biz.photoUrl,
+      photo_original_url: biz.photoOriginalUrl,
+      photo_crop:         biz.photoCrop,
+      photo_aspect:       biz.photoAspect,
       spot_type:        biz.spotType || null,
       category:         biz.category,
       tagline:          biz.tagline,
@@ -425,8 +428,23 @@ export default function OwnerOnboarding() {
         </div>
 
         <div style={{ background:C.card, border:`1px solid ${C.border}`, borderRadius:17, padding:'24px 26px', display:'flex', flexDirection:'column', gap:16 }}>
-          <Field label="Photo" hint="Optional, but listings with a photo get noticed">
-            <PhotoUpload value={biz.photoUrl} onChange={url=>update('photoUrl', url)} />
+          <Field label="Photo" hint="Optional, but listings with a photo get noticed. Pick the shape that suits your image.">
+            <PhotoUpload
+              value={biz.photoUrl}
+              originalValue={biz.photoOriginalUrl}
+              crop={biz.photoCrop}
+              shape={biz.photoAspect}
+              onShapeChange={v=>update('photoAspect', v)}
+              onChange={(url, meta)=>setBiz(p=>({
+                ...p,
+                photoUrl:         url,
+                // Keeping the original is what makes Adjust work later. The
+                // old single-argument handler dropped it, so a photo added
+                // during onboarding could never be re-framed.
+                photoOriginalUrl: meta?.original_url ?? null,
+                photoCrop:        meta?.crop ?? null,
+              }))}
+            />
           </Field>
 
           <Field label="Pick an icon" hint="Used on small cards and when you have no photo">

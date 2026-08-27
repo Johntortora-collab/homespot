@@ -997,6 +997,7 @@ function SettingsPage({ spot, onSaved }) {
     photo_url: spot.photo_url || null,
     photo_original_url: spot.photo_original_url || null,
     photo_crop: spot.photo_crop || null,
+    photo_aspect: spot.photo_aspect || 'wide',
     category:  spot.category || '',
     spot_type: spot.spot_type || 'do',
     hours:     spot.hours || '',
@@ -1078,11 +1079,13 @@ function SettingsPage({ spot, onSaved }) {
       )}
 
       <div style={{ background:C.card, border:`1px solid ${C.border}`, borderRadius:17, padding:'24px', maxWidth:580, display:'flex', flexDirection:'column', gap:18, marginBottom:20 }}>
-        <Field label="Photo" hint="Shown on Main Street and at the top of your page. Use Adjust to re-frame it any time.">
+        <Field label="Photo" hint="Shown on Main Street and at the top of your page. Pick the shape that suits your image, then use Adjust to re-frame it.">
           <PhotoUpload
             value={f.photo_url}
             originalValue={f.photo_original_url}
             crop={f.photo_crop}
+            shape={f.photo_aspect}
+            onShapeChange={v => up('photo_aspect', v)}
             onChange={(url, meta) => setF(p => ({
               ...p,
               photo_url:          url,

@@ -1,7 +1,7 @@
 import { useRef, useState, useEffect } from 'react'
 import { supabase } from '../lib/supabase'
 import ImageCropper from './ImageCropper'
-import { PHOTO_ASPECT } from '../lib/photo'
+import { PHOTO_ASPECT, PHOTO_SHAPES, DEFAULT_PHOTO_SHAPE, photoAspect } from '../lib/photo'
 
 const BUCKET = 'spot-photos'
 
@@ -37,7 +37,11 @@ const ORIGINAL_QUALITY = 0.9
  *   onChange      — onChange(url, meta) where meta is
  *                   { original_url, crop } or null when removed.
  *                   Callers that only take the first argument still work.
- *   aspect        — output ratio, defaults to PHOTO_ASPECT
+ *   shape         — stored shape key: 'wide' | 'square' | 'tall'
+ *   onShapeChange — onShapeChange(key). Omit it and the picker is hidden,
+ *                   which is what a caller that can't persist a shape wants.
+ *   aspect        — explicit ratio override. Normally leave this alone and let
+ *                   it follow `shape`.
  *   colors        — palette override so this fits both owner surfaces
  */
 export default function PhotoUpload({
@@ -45,9 +49,12 @@ export default function PhotoUpload({
   originalValue = null,
   crop = null,
   onChange,
-  aspect = PHOTO_ASPECT,
+  shape = DEFAULT_PHOTO_SHAPE,
+  onShapeChange = null,
+  aspect,
   colors = {},
 }) {
+  const activeAspect = aspect ?? photoAspect(shape)
   const C = {
     bg:     '#FDF8F2',
     card:   '#FFFFFF',
@@ -55,6 +62,7 @@ export default function PhotoUpload({
     ink:    '#1A1A2E',
     muted:  '#6B7280',
     amber:  '#F5A623',
+    amberSoft: '#FEF3DC',
     ...colors,
   }
 
@@ -137,6 +145,25 @@ export default function PhotoUpload({
       return
     }
     setEditing({ src: originalValue, originalBlob: null, initialCrop: crop })
+  }
+
+  // Switching shape changes what the stored cover has to be, not just how it's
+  // displayed. Re-open the cropper at the new ratio so the saved file matches —
+  // otherwise the browser crops the old cover a second time and the owner's
+  // framing is lost. When there's no original to re-cut, the shape still
+  // changes and the cover is squeezed by object-fit; say so rather than
+  // silently producing a worse image.
+  function handleShape(key) {
+    if (key === shape) return
+    setError('')
+    onShapeChange?.(key)
+
+    if (!value) return
+    if (originalValue) {
+      setEditing({ src: originalValue, originalBlob: null, initialCrop: null })
+    } else {
+      setError('Shape changed, but this photo has no original to re-cut — replace it to frame it properly.')
+    }
   }
 
   async function handleCropSave({ crop: nextCrop, blob: coverBlob }) {
@@ -228,12 +255,49 @@ export default function PhotoUpload({
         style={{ display: 'none' }}
       />
 
+      {onShapeChange && (
+        <div style={{ marginBottom: 10 }}>
+          <div style={{ display: 'flex', gap: 7 }}>
+            {PHOTO_SHAPES.map(s => {
+              const on = s.key === shape
+              return (
+                <button
+                  key={s.key}
+                  type="button"
+                  onClick={() => handleShape(s.key)}
+                  disabled={busy}
+                  style={{
+                    flex: 1, background: on ? C.amberSoft || '#FEF3DC' : C.bg,
+                    border: `1.5px solid ${on ? C.amber : C.border}`,
+                    borderRadius: 10, padding: '8px 6px', cursor: busy ? 'default' : 'pointer',
+                    fontFamily: 'inherit', display: 'flex', flexDirection: 'column',
+                    alignItems: 'center', gap: 5, transition: 'all 0.15s',
+                  }}>
+                  <span style={{
+                    display: 'block', width: 22, borderRadius: 3,
+                    aspectRatio: String(s.ratio),
+                    background: on ? C.amber : C.border,
+                  }} />
+                  <span style={{
+                    fontSize: 11.5, fontWeight: on ? 600 : 400,
+                    color: on ? C.ink : C.muted,
+                  }}>{s.label}</span>
+                </button>
+              )
+            })}
+          </div>
+          <div style={{ fontSize: 11.5, color: C.muted, marginTop: 6, lineHeight: 1.5 }}>
+            {PHOTO_SHAPES.find(s => s.key === shape)?.hint}
+          </div>
+        </div>
+      )}
+
       {value ? (
         <div style={{ position:'relative', borderRadius:13, overflow:'hidden', border:`1px solid ${C.border}` }}>
           <img
             src={value}
             alt="Your business"
-            style={{ display:'block', width:'100%', aspectRatio:String(aspect), objectFit:'cover', background:C.bg }}
+            style={{ display:'block', width:'100%', aspectRatio:String(activeAspect), objectFit:'cover', background:C.bg }}
           />
           <div style={{ display:'flex', gap:8, padding:10, background:C.card }}>
             <button
@@ -289,7 +353,7 @@ export default function PhotoUpload({
       {editing && (
         <ImageCropper
           src={editing.src}
-          aspect={aspect}
+          aspect={activeAspect}
           initial={editing.initialCrop}
           outputWidth={COVER_EDGE}
           quality={COVER_QUALITY}

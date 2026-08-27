@@ -3,6 +3,7 @@ import { useParams, useNavigate } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../lib/AuthContext'
 import SpotDemo from '../components/SpotDemo'
+import { spotPhotoAspect } from '../lib/photo'
 
 const C = {
   bg:'#13131F', card:'#1E1E30', card2:'#252538',
@@ -155,8 +156,15 @@ export default function SpotPreview() {
 
         {/* The listing itself, rendered as customers would see it */}
         <div style={{ background:C.card, border:`1px solid ${C.border}`, borderRadius:20, overflow:'hidden', marginBottom:18, animation:'up 0.4s ease' }}>
+          {/* Their own shape, not a fixed height — a square logo squeezed into
+              a banner is the first thing an owner notices, and it's the last
+              impression you want on the page that asks them to sign up. */}
           {spot.photo_url ? (
-            <img src={spot.photo_url} alt={spot.name} style={{ width:'100%', height:165, objectFit:'cover', display:'block' }}/>
+            <img
+              src={spot.photo_url}
+              alt={spot.name}
+              style={{ width:'100%', aspectRatio:String(spotPhotoAspect(spot)), objectFit:'cover', display:'block' }}
+            />
           ) : (
             <div style={{ height:130, background:`linear-gradient(150deg,${spot.color||C.amber}22,${C.card2})`, display:'flex', alignItems:'center', justifyContent:'center', fontSize:52 }}>
               {spot.emoji}

@@ -16,6 +16,8 @@
  * tag — an owner who launches and finds 0 visits should never feel misled.
  */
 
+import { spotPhotoAspect } from '../lib/photo'
+
 // ConsumerApp palette
 const C = {
   bg: '#13131F', card: '#1E1E30', card2: '#252538',
@@ -419,7 +421,8 @@ function SpotPageScreen({ spot, accent, total, perk }) {
   return (
     <>
       <div style={{
-        height: 108, flexShrink: 0, position: 'relative',
+        width: '100%', aspectRatio: String(spotPhotoAspect(spot)), maxHeight: 190,
+        flexShrink: 0, position: 'relative', overflow: 'hidden',
         background: `linear-gradient(150deg,${accent}22,${C.card2})`,
         display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 42,
       }}>

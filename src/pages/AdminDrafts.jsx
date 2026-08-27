@@ -98,9 +98,14 @@ export default function AdminDrafts() {
     setRows(prev => prev.filter(r => r.id !== spotId))
   }
 
-  async function setPhoto(spotId, url) {
+  // Shape travels with the photo: the RPC leaves it alone when it's null, so
+  // changing the shape before any photo exists still sticks.
+  async function setPhoto(spotId, url, meta = null, aspect = null) {
     const { data, error: err } = await supabase.rpc('admin_set_spot_photo', {
-      p_spot_id: spotId, p_photo_url: url,
+      p_spot_id: spotId,
+      p_photo_url: url,
+      p_photo_aspect: aspect,
+      p_original_url: meta?.original_url ?? null,
     })
     if (err || !data?.ok) {
       setError(err?.message || data?.error || 'Could not save the photo.')
@@ -109,7 +114,9 @@ export default function AdminDrafts() {
     setError('')
     // Update in place rather than refetching — you're often on a phone with
     // one bar, and a full reload would lose your scroll position mid-visit.
-    setRows(prev => prev.map(r => r.id === spotId ? { ...r, photo_url: url } : r))
+    setRows(prev => prev.map(r => r.id === spotId
+      ? { ...r, photo_url: url, photo_aspect: aspect || r.photo_aspect }
+      : r))
   }
 
   async function copyBoth(row) {
@@ -225,7 +232,7 @@ export default function AdminDrafts() {
           {open.map(r => (
             <DraftCard key={r.id} row={r} copied={copied===r.id} onCopy={()=>copyLink(r.id)}
               copiedBoth={copiedBoth===r.id} onCopyBoth={()=>copyBoth(r)}
-              onPhoto={url=>setPhoto(r.id, url)} onDelete={()=>deleteDraft(r.id)}
+              onPhoto={(url, meta, aspect)=>setPhoto(r.id, url, meta, aspect)} onDelete={()=>deleteDraft(r.id)}
               onPlace={()=>placeOnMap(r)} onPrint={()=>print(r)} />
           ))}
         </>
@@ -299,7 +306,9 @@ function DraftCard({ row, copied, onCopy, copiedBoth, onCopyBoth, onPhoto, onDel
         <div style={{ marginBottom:11 }}>
           <PhotoUpload
             value={row.photo_url}
-            onChange={url => { onPhoto(url); if (url) setEditingPhoto(false) }}
+            shape={row.photo_aspect || 'wide'}
+            onShapeChange={next => onPhoto(row.photo_url, null, next)}
+            onChange={(url, meta) => { onPhoto(url, meta, row.photo_aspect || 'wide'); if (url) setEditingPhoto(false) }}
           />
           <button onClick={()=>setEditingPhoto(false)}
             style={{ background:'none', border:'none', color:C.mid, fontSize:12, cursor:'pointer', marginTop:8, fontFamily:'inherit' }}>

@@ -365,16 +365,23 @@ function BusinessForm({ spot, towns, onCancel, onSave }) {
   const [saving, setSaving] = useState(false)
   const [err, setErr] = useState('')
   const [photo, setPhoto] = useState(spot?.photo_url || null)
+  const [photoAspect, setPhotoAspect] = useState(spot?.photo_aspect || 'wide')
   const up = (k,v) => setF(p=>({ ...p, [k]:v }))
 
   // Photo goes through its own RPC rather than the main save: admin_update_spot
   // has a fixed parameter list that predates the column, and a draft has no
   // owner so the owner-scoped update path can't reach it either.
-  async function savePhoto(url) {
+  async function savePhoto(url, meta = null, aspect = null) {
     setPhoto(url)
+    if (aspect) setPhotoAspect(aspect)
     if (!spot?.id) return   // creating — nothing to attach it to yet
     const { data, error } = await supabase.rpc('admin_set_spot_photo', {
-      p_spot_id: spot.id, p_photo_url: url,
+      p_spot_id: spot.id,
+      p_photo_url: url,
+      p_photo_aspect: aspect,
+      // Storing the original is what lets the owner re-frame it later, once
+      // they've claimed the listing.
+      p_original_url: meta?.original_url ?? null,
     })
     if (error || !data?.ok) setErr(error?.message || data?.error || 'Could not save the photo.')
   }
@@ -396,7 +403,12 @@ function BusinessForm({ spot, towns, onCancel, onSave }) {
         <div>
           <label style={{ fontSize:12.5, fontWeight:600, color:C.mid, display:'block', marginBottom:7 }}>Photo</label>
           {spot?.id ? (
-            <PhotoUpload value={photo} onChange={savePhoto} />
+            <PhotoUpload
+              value={photo}
+              shape={photoAspect}
+              onShapeChange={next => savePhoto(photo, null, next)}
+              onChange={(url, meta) => savePhoto(url, meta, photoAspect)}
+            />
           ) : (
             <div style={{ background:C.bg, border:`1px dashed ${C.border}`, borderRadius:11, padding:'14px', fontSize:12.5, color:C.muted, lineHeight:1.55 }}>
               Create the business first, then reopen it here to add a photo.
