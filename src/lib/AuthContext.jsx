@@ -8,26 +8,43 @@ export function AuthProvider({ children }) {
   const [profile, setProfile]   = useState(null)
   const [profileLoading, setProfileLoading] = useState(true)
 
+  // True once the first session + profile resolve has finished, one time per
+  // page load. `loading` is derived from this rather than from profileLoading
+  // on purpose: a profile refetch mid-session used to flip loading back to
+  // true, which unmounted whatever the user was in the middle of. Signing up
+  // on the claim page did exactly that — the account was created, the tree
+  // came down, and the in-flight claim lost its component.
+  const [bootstrapped, setBootstrapped] = useState(false)
+
   useEffect(() => {
+    let alive = true
+
     // Grab initial session
-    supabase.auth.getSession().then(({ data }) => {
+    supabase.auth.getSession().then(async ({ data }) => {
+      if (!alive) return
       setSession(data.session)
-      if (data.session) fetchProfile(data.session.user.id)
+      if (data.session) await fetchProfile(data.session.user.id)
       else setProfileLoading(false)
+      if (alive) setBootstrapped(true)
     })
 
-    // Listen for auth changes
+    // Listen for auth changes.
+    //
+    // Deliberately not async, and the profile work is pushed out with a
+    // setTimeout: supabase-js holds an internal lock for the duration of this
+    // callback, and calling back into the client from inside it is documented
+    // as a way to deadlock. Deferring lets the lock release first.
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
       setSession(session)
       if (session) {
-        fetchProfile(session.user.id)
+        setTimeout(() => { fetchProfile(session.user.id) }, 0)
       } else {
         setProfile(null)
         setProfileLoading(false)
       }
     })
 
-    return () => subscription.unsubscribe()
+    return () => { alive = false; subscription.unsubscribe() }
   }, [])
 
   async function fetchProfile(userId) {
@@ -70,7 +87,7 @@ export function AuthProvider({ children }) {
       password,
       options: {
         data: { full_name: fullName, role },
-        emailRedirectTo: window.location.origin,
+        emailRedirectTo: window.location.href,
       },
     })
     return { data, error }
@@ -92,7 +109,6 @@ export function AuthProvider({ children }) {
     })
   }
 
-  // Sign-out intentionally removed — to be rebuilt cleanly.
   async function signOut() {
     // Google OAuth sessions are revoked server-side, so a global scope + await
     // is required — a local-only clear leaves the session alive and the reload
@@ -158,13 +174,14 @@ export function AuthProvider({ children }) {
   // no password to change — they manage it with Google.
   const authProvider = session?.user?.app_metadata?.provider || 'email'
 
-  const loading = session === undefined || (session !== null && profileLoading)
+  const loading = !bootstrapped
 
   return (
     <AuthContext.Provider value={{
       session,
       profile,
       loading,
+      profileLoading,
       signUp,
       signIn,
       signInWithGoogle,

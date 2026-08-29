@@ -20,15 +20,29 @@ const C = {
  * Claiming needs the 6-character code, which never travels in the URL. The
  * link alone must not be enough to take over a business's listing — someone
  * glancing over a shoulder shouldn't be able to.
+ *
+ * Everything survives a remount on purpose. Creating an account mid-claim
+ * changes the auth state, which can tear this component down while the
+ * claim RPC is still in flight — React state goes with it, but the write to
+ * the database does not. Two sessionStorage keys carry the claim across that
+ * gap: a pending code to resume with, and a completed marker so a fresh mount
+ * knows it already won rather than showing a dead end.
  */
 export default function SpotPreview() {
   const { spotId } = useParams()
   const navigate   = useNavigate()
   const { session, signUp, signIn } = useAuth()
 
+  const pendingKey = `hs_pending_${spotId}`
+  const claimedKey = `hs_claimed_${spotId}`
+
+  const read = (k) => { try { return sessionStorage.getItem(k) } catch { return null } }
+  const write = (k, v) => { try { sessionStorage.setItem(k, v) } catch {} }
+  const drop = (k) => { try { sessionStorage.removeItem(k) } catch {} }
+
   const [spot,    setSpot]    = useState(null)
   const [loading, setLoading] = useState(true)
-  const [stage,   setStage]   = useState('preview')   // preview | claim | done
+  const [stage,   setStage]   = useState(() => (read(`hs_claimed_${spotId}`) ? 'done' : 'preview'))
   const [error,   setError]   = useState('')
   const [busy,    setBusy]    = useState(false)
 
@@ -39,51 +53,111 @@ export default function SpotPreview() {
   const [pw,    setPw]    = useState('')
   const [needsConfirm, setNeedsConfirm] = useState(false)
 
+  // What the success screen shows when the row itself is gone or restricted.
+  let snap = null
+  try { snap = JSON.parse(read(claimedKey) || 'null') } catch { snap = null }
+
   useEffect(() => {
     if (!spotId) return
+    let alive = true
+
     supabase.rpc('get_draft_spot', { p_spot_id: spotId }).then(({ data }) => {
-      setSpot(data?.[0] || null)
+      if (!alive) return
+      const row = data?.[0] || null
+      setSpot(row)
       setLoading(false)
+
+      // Was a claim in flight when this component last went away?
+      const pending = read(pendingKey)
+      if (!row || !pending) return
+
+      if (row.is_claimed) {
+        // It landed. The remount just didn't get to see it.
+        drop(pendingKey)
+        write(claimedKey, JSON.stringify({ name: row.name, town: row.town_name }))
+        setStage('done')
+      } else if (session) {
+        // Account exists now but the claim never fired — finish it.
+        setStage('claim')
+        setBusy(true)
+        finishClaim(pending, { name: row.name, town: row.town_name })
+      }
     })
-  }, [spotId])
+
+    return () => { alive = false }
+  }, [spotId, session])
+
+  async function finishClaim(codeVal, info) {
+    const { data, error: rpcErr } = await supabase.rpc('claim_spot', {
+      p_spot_id: spotId,
+      p_code: codeVal,
+    })
+
+    drop(pendingKey)
+    setBusy(false)
+
+    if (rpcErr)    return setError(rpcErr.message)
+    if (!data?.ok) return setError(data?.error || 'Could not claim this listing.')
+
+    // Written before setStage on purpose: this line still runs even if the
+    // component has already been torn down, and it is what lets the next
+    // mount show the success screen instead of "not found".
+    write(claimedKey, JSON.stringify({ name: info?.name, town: info?.town }))
+    setStage('done')
+  }
 
   async function handleClaim() {
     setError('')
-    if (code.trim().length < 4) return setError('Enter the code you were given.')
+    const entered = code.trim()
+    if (entered.length < 4) return setError('Enter the code you were given.')
     setBusy(true)
+
+    // Stored before the account is created. If signing up unmounts this
+    // component, the code is still here when it comes back.
+    write(pendingKey, entered)
 
     // Sign in or sign up first when there's no session — claim_spot needs a
     // real authenticated user to hang ownership on.
     if (!session) {
       if (mode === 'signup') {
         const { data, error: err } = await signUp({ email, password: pw, fullName: name, role: 'owner' })
-        if (err) { setBusy(false); return setError(err.message) }
+        if (err) { drop(pendingKey); setBusy(false); return setError(err.message) }
         if (!data?.session) {
           // Email confirmation is on. Nothing more can happen until they click
-          // the link, so say so rather than failing mysteriously.
+          // the link, so say so rather than failing mysteriously. The pending
+          // code stays put — coming back to this page finishes the job.
           setBusy(false)
           setNeedsConfirm(true)
           return
         }
       } else {
         const { error: err } = await signIn({ email, password: pw })
-        if (err) { setBusy(false); return setError(err.message) }
+        if (err) { drop(pendingKey); setBusy(false); return setError(err.message) }
       }
     }
 
-    const { data, error: rpcErr } = await supabase.rpc('claim_spot', {
-      p_spot_id: spotId,
-      p_code: code.trim(),
-    })
-    setBusy(false)
-
-    if (rpcErr)      return setError(rpcErr.message)
-    if (!data?.ok)   return setError(data?.error || 'Could not claim this listing.')
-
-    setStage('done')
+    await finishClaim(entered, { name: spot?.name, town: spot?.town_name })
   }
 
   if (loading) return <Centered>Loading…</Centered>
+
+  // Ahead of the not-found check: a successful claim clears claim_code, and
+  // whether the row still comes back depends on get_draft_spot. The owner
+  // should see they won either way.
+  if (stage === 'done') return (
+    <Centered>
+      <div style={{ fontSize:48, marginBottom:16, animation:'pop 0.5s ease' }}>🎉</div>
+      <div style={{ fontFamily:'Fraunces,serif', fontSize:23, color:'#fff', fontWeight:700, marginBottom:10 }}>
+        {spot?.name || snap?.name || 'Your listing'} is live!
+      </div>
+      <div style={{ fontSize:13.5, color:C.dim, lineHeight:1.65, marginBottom:24 }}>
+        You're on Main Street{(spot?.town_name || snap?.town) ? ` in ${spot?.town_name || snap?.town}` : ''}. Next:
+        print your Spot QR so customers can start collecting stamps.
+      </div>
+      <Button onClick={()=>{ drop(claimedKey); navigate('/owner/dashboard') }}>Open my dashboard →</Button>
+      <Keyframes/>
+    </Centered>
+  )
 
   if (!spot) return (
     <Centered>
@@ -95,7 +169,7 @@ export default function SpotPreview() {
     </Centered>
   )
 
-  if (spot.is_claimed && stage !== 'done') return (
+  if (spot.is_claimed) return (
     <Centered>
       <div style={{ fontSize:40, marginBottom:14 }}>✓</div>
       <div style={{ fontFamily:'Fraunces,serif', fontSize:20, color:'#fff', marginBottom:8 }}>Already live</div>
@@ -103,21 +177,6 @@ export default function SpotPreview() {
         {spot.name} has already been claimed and is on Homespot.
       </div>
       <Button onClick={()=>navigate('/owner/dashboard')}>Go to dashboard</Button>
-    </Centered>
-  )
-
-  if (stage === 'done') return (
-    <Centered>
-      <div style={{ fontSize:48, marginBottom:16, animation:'pop 0.5s ease' }}>🎉</div>
-      <div style={{ fontFamily:'Fraunces,serif', fontSize:23, color:'#fff', fontWeight:700, marginBottom:10 }}>
-        {spot.name} is live!
-      </div>
-      <div style={{ fontSize:13.5, color:C.dim, lineHeight:1.65, marginBottom:24 }}>
-        You're on Main Street in {spot.town_name}. Next: print your Spot QR so customers
-        can start collecting stamps.
-      </div>
-      <Button onClick={()=>navigate('/owner/dashboard')}>Open my dashboard →</Button>
-      <Keyframes/>
     </Centered>
   )
 
@@ -212,7 +271,7 @@ export default function SpotPreview() {
             ['🗂', 'A digital loyalty card — no punch cards to reprint'],
             ['🔔', 'Send an offer that reaches your regulars\' phones'],
             ['📊', 'See who your repeat customers are, and who\'s gone quiet'],
-            ['🏘️', 'A listing on Main Street where neighbours are already looking'],
+            ['🏘️', 'A listing on Main Street where neighbors are already looking'],
           ].map(([icon, text]) => (
             <div key={text} style={{ display:'flex', gap:10, alignItems:'flex-start', marginBottom:9 }}>
               <span style={{ fontSize:14, flexShrink:0 }}>{icon}</span>
@@ -234,7 +293,7 @@ export default function SpotPreview() {
             <div style={{ fontFamily:'Fraunces,serif', fontSize:17, color:'#fff', fontWeight:700, marginBottom:8 }}>Check your email</div>
             <div style={{ fontSize:13, color:C.dim, lineHeight:1.6 }}>
               We sent a confirmation link to <strong style={{ color:'#fff' }}>{email}</strong>. Click it,
-              then come back to this page and enter your code to finish.
+              then come back to this page — we'll finish claiming {spot.name} for you.
             </div>
           </div>
         ) : (
