@@ -45,6 +45,7 @@ export default function SpotPreview() {
   const [stage,   setStage]   = useState(() => (read(`hs_claimed_${spotId}`) ? 'done' : 'preview'))
   const [error,   setError]   = useState('')
   const [busy,    setBusy]    = useState(false)
+  const [step,    setStep]    = useState('')          // account | claim
 
   const [code,  setCode]  = useState('')
   const [mode,  setMode]  = useState('signup')        // signup | signin
@@ -80,6 +81,7 @@ export default function SpotPreview() {
         // Account exists now but the claim never fired — finish it.
         setStage('claim')
         setBusy(true)
+        setStep('claim')
         finishClaim(pending, { name: row.name, town: row.town_name })
       }
     })
@@ -95,6 +97,7 @@ export default function SpotPreview() {
 
     drop(pendingKey)
     setBusy(false)
+    setStep('')
 
     if (rpcErr)    return setError(rpcErr.message)
     if (!data?.ok) return setError(data?.error || 'Could not claim this listing.')
@@ -111,6 +114,7 @@ export default function SpotPreview() {
     const entered = code.trim()
     if (entered.length < 4) return setError('Enter the code you were given.')
     setBusy(true)
+    setStep(session ? 'claim' : 'account')
 
     // Stored before the account is created. If signing up unmounts this
     // component, the code is still here when it comes back.
@@ -121,19 +125,21 @@ export default function SpotPreview() {
     if (!session) {
       if (mode === 'signup') {
         const { data, error: err } = await signUp({ email, password: pw, fullName: name, role: 'owner' })
-        if (err) { drop(pendingKey); setBusy(false); return setError(err.message) }
+        if (err) { drop(pendingKey); setBusy(false); setStep(''); return setError(err.message) }
         if (!data?.session) {
           // Email confirmation is on. Nothing more can happen until they click
           // the link, so say so rather than failing mysteriously. The pending
           // code stays put — coming back to this page finishes the job.
           setBusy(false)
+          setStep('')
           setNeedsConfirm(true)
           return
         }
       } else {
         const { error: err } = await signIn({ email, password: pw })
-        if (err) { drop(pendingKey); setBusy(false); return setError(err.message) }
+        if (err) { drop(pendingKey); setBusy(false); setStep(''); return setError(err.message) }
       }
+      setStep('claim')
     }
 
     await finishClaim(entered, { name: spot?.name, town: spot?.town_name })
@@ -189,6 +195,8 @@ export default function SpotPreview() {
         input::placeholder{color:#555}
         @keyframes pop{0%{transform:scale(0.8);opacity:0}60%{transform:scale(1.06)}100%{transform:scale(1);opacity:1}}
         @keyframes up{from{opacity:0;transform:translateY(12px)}to{opacity:1;transform:none}}
+        @keyframes sweep{0%{transform:translateX(-100%)}100%{transform:translateX(320%)}}
+        @keyframes fadeSlow{from{opacity:0}to{opacity:1}}
       `}</style>
 
       <div style={{ maxWidth:400, margin:'0 auto' }}>
@@ -341,8 +349,42 @@ export default function SpotPreview() {
               )}
 
               <Button onClick={handleClaim} full disabled={busy}>
-                {busy ? 'Setting up…' : 'Claim this listing →'}
+                {busy
+                  ? (step === 'account' ? 'Creating your account…' : 'Claiming your listing…')
+                  : 'Claim this listing →'}
               </Button>
+
+              {/* Two dashes that fill as the work completes, with a moving
+                  sheen on the one in progress. Nothing here is a real
+                  percentage — it exists so a slow network doesn't read as a
+                  frozen button, which is where people give up. */}
+              {busy && (
+                <div style={{ marginTop:-2 }}>
+                  <div style={{ display:'flex', gap:5 }}>
+                    {['account','claim'].map((s, i) => {
+                      const order = { account:0, claim:1 }
+                      const activeIdx = order[step] ?? 0
+                      const doneBar   = i < activeIdx
+                      const liveBar   = i === activeIdx
+                      return (
+                        <div key={s} style={{ flex:1, height:3, borderRadius:2, background: doneBar ? C.amber : C.card2, overflow:'hidden', position:'relative' }}>
+                          {liveBar && (
+                            <div style={{ position:'absolute', inset:0, width:'40%', background:C.amber, borderRadius:2, animation:'sweep 1.1s ease-in-out infinite' }}/>
+                          )}
+                        </div>
+                      )
+                    })}
+                  </div>
+                  <div style={{ fontSize:11.5, color:C.dim, textAlign:'center', marginTop:9, lineHeight:1.5 }}>
+                    {step === 'account'
+                      ? 'Setting up your owner account…'
+                      : `Putting ${spot.name} on Main Street…`}
+                  </div>
+                  <div style={{ fontSize:11, color:'#555', textAlign:'center', marginTop:5, animation:'fadeSlow 1s ease 4s both' }}>
+                    Still working — this can take a few seconds.
+                  </div>
+                </div>
+              )}
 
               <button onClick={()=>{setStage('preview'); setError('')}}
                 style={{ background:'none', border:'none', color:'#555', fontSize:12, cursor:'pointer', marginTop:2 }}>
