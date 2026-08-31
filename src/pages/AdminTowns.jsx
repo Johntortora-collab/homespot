@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react'
+import { useState, useMemo, useEffect } from 'react'
 import { useAuth } from '../lib/AuthContext'
 import { useAdminTowns, useAdminSpots, useIsAdmin, useAdminOverview, useAdminUsers, useAdminOffers, useAdminFeedback } from '../lib/hooks'
 import PhotoUpload from '../components/PhotoUpload'
@@ -42,6 +42,24 @@ function AdminShell({ profile }) {
     [fb.feedback]
   )
 
+  // Unread owner messages, for the Messages link badge. Small enough to query
+  // inline rather than adding another hook to lib/hooks.
+  const [unreadMsgs, setUnreadMsgs] = useState(0)
+  useEffect(() => {
+    let alive = true
+    const load = async () => {
+      const { count } = await supabase
+        .from('messages')
+        .select('id', { count:'exact', head:true })
+        .eq('sender_role', 'owner')
+        .eq('read_by_admin', false)
+      if (alive) setUnreadMsgs(count || 0)
+    }
+    load()
+    const t = setInterval(load, 30000)
+    return () => { alive = false; clearInterval(t) }
+  }, [])
+
   return (
     <div style={{ minHeight:'100vh', background:C.bg, fontFamily:'Inter,sans-serif', color:C.ink }}>
       <style>{`
@@ -71,10 +89,18 @@ function AdminShell({ profile }) {
             </button>
           ))}
 
-          {/* A link, not a tab: the drafts sheet is its own page because it's
-              built for a phone on a sidewalk, not for this desktop layout. */}
+          {/* Links, not tabs: both are their own pages. Drafts is built for a
+              phone on a sidewalk, and Messages carries its own thread view. */}
+          <a href="/admin/messages"
+            style={{ background:C.card, color:C.mid, border:`1px solid ${C.border}`, borderRadius:20, padding:'8px 18px', fontSize:13, fontWeight:600, display:'flex', alignItems:'center', gap:7, textDecoration:'none', marginLeft:'auto' }}>
+            💬 Messages
+            {unreadMsgs > 0 && (
+              <span style={{ background:C.rose, color:'#fff', borderRadius:9, minWidth:18, height:18, padding:'0 5px', fontSize:11, fontWeight:700, display:'inline-flex', alignItems:'center', justifyContent:'center' }}>{unreadMsgs}</span>
+            )}
+          </a>
+
           <a href="/admin/drafts"
-            style={{ background:C.amberSoft, color:'#8A6A00', border:`1px solid ${C.amber}`, borderRadius:20, padding:'8px 18px', fontSize:13, fontWeight:600, display:'flex', alignItems:'center', gap:7, textDecoration:'none', marginLeft:'auto' }}>
+            style={{ background:C.amberSoft, color:'#8A6A00', border:`1px solid ${C.amber}`, borderRadius:20, padding:'8px 18px', fontSize:13, fontWeight:600, display:'flex', alignItems:'center', gap:7, textDecoration:'none' }}>
             📋 Drafts →
           </a>
         </div>
