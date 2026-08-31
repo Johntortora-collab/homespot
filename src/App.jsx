@@ -22,6 +22,7 @@ import SpotPreview from './pages/SpotPreview'
 // Admin
 import AdminTowns from './pages/AdminTowns'
 import AdminDrafts from './pages/AdminDrafts'
+import AdminMessages from './pages/AdminMessages'
 import Splash from './components/Splash'
 
 function Router() {
@@ -75,6 +76,7 @@ function Screens({ session, profile }) {
       {legalRoutes}
       <Route path="/admin"           element={<AdminTowns />} />
       <Route path="/admin/drafts"    element={<AdminDrafts />} />
+      <Route path="/admin/messages"  element={<AdminMessages />} />
       <Route path="/scan/:spotId"    element={<ScanRoute />} />
       <Route path="/owner"           element={<Navigate to="/owner/dashboard" replace />} />
       <Route path="/owner/onboard"   element={<OwnerOnboarding />} />
@@ -95,6 +97,7 @@ function Screens({ session, profile }) {
       {legalRoutes}
       <Route path="/admin"        element={<AdminTowns />} />
       <Route path="/admin/drafts" element={<AdminDrafts />} />
+      <Route path="/admin/messages" element={<AdminMessages />} />
       <Route path="/scan/:spotId" element={<ScanRoute />} />
       {/* A signed-in consumer must still be able to reach business onboarding.
           Without this, "/owner" fell through to the "/*" catch-all below and
