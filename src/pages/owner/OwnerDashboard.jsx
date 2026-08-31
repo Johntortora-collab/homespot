@@ -3,6 +3,7 @@ import { useAuth } from '../../lib/AuthContext'
 import { useMySpot, useDashboardStats, useRealtimeVisits, useSendOffer, useOwnerFeedback, useManageSpot, useLiveOffers, useSpotRedemptions, useOfferPushWindow } from '../../lib/hooks'
 import { supabase } from '../../lib/supabase'
 import PhotoUpload from '../../components/PhotoUpload'
+import OwnerMessages from '../../components/OwnerMessages'
 
 const C = {
   bg:'#FDF8F2', card:'#FFFFFF', navy:'#1A1A2E',
@@ -49,6 +50,27 @@ export default function OwnerDashboard() {
     if (!spotLoading && !spot) setPage('create')
   }, [spotLoading, spot])
 
+  // Unread replies from support, for the nav badge. Polled rather than
+  // realtime for the same reason the thread itself is — one less thing that
+  // has to be switched on in a dashboard to work.
+  const [unread, setUnread] = useState(0)
+  useEffect(() => {
+    if (!spot?.id) return
+    let alive = true
+    const load = async () => {
+      const { count } = await supabase
+        .from('messages')
+        .select('id', { count:'exact', head:true })
+        .eq('spot_id', spot.id)
+        .eq('sender_role', 'admin')
+        .eq('read_by_owner', false)
+      if (alive) setUnread(count || 0)
+    }
+    load()
+    const t = setInterval(load, 20000)
+    return () => { alive = false; clearInterval(t) }
+  }, [spot?.id, page])
+
   const navItems = spot ? [
     { id:'overview',  label:'Overview',   icon:'◈' },
     { id:'customers', label:'Customers',  icon:'◎' },
@@ -56,6 +78,7 @@ export default function OwnerDashboard() {
     { id:'perks',     label:'Perk Claims', icon:'🎁' },
     { id:'feedback',  label:'Feedback',   icon:'◻' },
     { id:'qr',        label:'Tap Tag',    icon:'📲' },
+    { id:'support',   label:'Support',    icon:'✉', badge: unread },
     { id:'settings',  label:'Settings',   icon:'⚙' },
   ] : [
     { id:'create',    label:'Create Spot', icon:'✦' },
@@ -147,6 +170,11 @@ export default function OwnerDashboard() {
             <button key={item.id} onClick={()=>setPage(item.id)} style={{ width:'100%', display:'flex', alignItems:'center', gap:9, padding:'10px 11px', borderRadius:9, border:'none', background:page===item.id?'rgba(245,166,35,0.15)':'none', color:page===item.id?C.amber:'rgba(255,255,255,0.5)', cursor:'pointer', marginBottom:2, textAlign:'left', fontSize:13, fontWeight:page===item.id?600:400, transition:'all 0.15s' }}>
               <span style={{ fontSize:15, width:18, textAlign:'center' }}>{item.icon}</span>
               {item.label}
+              {item.badge > 0 && (
+                <span style={{ marginLeft:'auto', background:C.amber, color:C.navy, fontSize:10.5, fontWeight:700, borderRadius:10, padding:'1px 7px', minWidth:18, textAlign:'center' }}>
+                  {item.badge}
+                </span>
+              )}
             </button>
           ))}
         </nav>
@@ -166,6 +194,7 @@ export default function OwnerDashboard() {
         {page==='settings'  && spot && <SettingsPage spot={spot} onSaved={refetchSpot}/>}
         {page==='feedback'  && spot && <FeedbackPage spot={spot}/>}
         {page==='qr'        && spot && <QRPage spot={spot}/>}
+        {page==='support'   && spot && <OwnerMessages spot={spot}/>}
         {page==='create'    && <CreateSpotPage onCreated={refetchSpot}/>}
         {!spot && page!=='create' && (
           <div style={{ textAlign:'center', padding:'70px 24px' }}>
@@ -184,7 +213,10 @@ export default function OwnerDashboard() {
       {/* Mobile bottom nav */}
       <nav className="ow-bottomnav">
         {navItems.map(item=>(
-          <button key={item.id} onClick={()=>setPage(item.id)} style={{ background:'none', border:'none', display:'flex', flexDirection:'column', alignItems:'center', gap:3, padding:'6px 8px', cursor:'pointer' }}>
+          <button key={item.id} onClick={()=>setPage(item.id)} style={{ background:'none', border:'none', display:'flex', flexDirection:'column', alignItems:'center', gap:3, padding:'6px 8px', cursor:'pointer', position:'relative' }}>
+            {item.badge > 0 && (
+              <span style={{ position:'absolute', top:2, right:4, width:7, height:7, borderRadius:'50%', background:C.amber }}/>
+            )}
             <span style={{ fontSize:18, color:page===item.id?C.amber:'rgba(255,255,255,0.4)' }}>{item.icon}</span>
             <span style={{ fontSize:9, color:page===item.id?C.amber:'rgba(255,255,255,0.4)', fontWeight:page===item.id?600:400 }}>{item.label.split(' ')[0]}</span>
           </button>
