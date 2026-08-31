@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../lib/AuthContext'
@@ -47,6 +47,14 @@ export default function SpotPreview() {
   const [busy,    setBusy]    = useState(false)
   const [step,    setStep]    = useState('')          // account | claim
 
+  // Guards against claim_spot firing twice. handleClaim starts it, then the
+  // effect below re-runs when a session appears and — seeing the pending code
+  // still in storage — starts it again before the first call has cleared it.
+  // The second call trips the "already claimed" branch and can paint an error
+  // over a claim that actually worked. A ref rather than state because it has
+  // to be readable synchronously and survive re-renders.
+  const claiming = useRef(false)
+
   const [code,  setCode]  = useState('')
   const [mode,  setMode]  = useState('signup')        // signup | signin
   const [name,  setName]  = useState('')
@@ -90,6 +98,9 @@ export default function SpotPreview() {
   }, [spotId, session])
 
   async function finishClaim(codeVal, info) {
+    if (claiming.current) return
+    claiming.current = true
+
     const { data, error: rpcErr } = await supabase.rpc('claim_spot', {
       p_spot_id: spotId,
       p_code: codeVal,
@@ -99,8 +110,11 @@ export default function SpotPreview() {
     setBusy(false)
     setStep('')
 
-    if (rpcErr)    return setError(rpcErr.message)
-    if (!data?.ok) return setError(data?.error || 'Could not claim this listing.')
+    // Released only on failure. A wrong code or a network error should be
+    // retryable; a success should not, since the row is claimed and a second
+    // attempt would come back as "already claimed" over the success screen.
+    if (rpcErr)    { claiming.current = false; return setError(rpcErr.message) }
+    if (!data?.ok) { claiming.current = false; return setError(data?.error || 'Could not claim this listing.') }
 
     // Written before setStage on purpose: this line still runs even if the
     // component has already been torn down, and it is what lets the next
