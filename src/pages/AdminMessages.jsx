@@ -97,7 +97,13 @@ function Inbox({ profile }) {
         )}
 
         {active ? (
-          <Thread spotId={active.spot_id} senderId={session?.user?.id} onSent={loadThreads} />
+          <Thread
+            spotId={active.spot_id}
+            spotName={active.spot_name}
+            senderId={session?.user?.id}
+            onSent={loadThreads}
+            onThreadDeleted={()=>{ setActive(null); loadThreads() }}
+          />
         ) : loading ? (
           <div style={{ fontSize:13.5, color:C.muted }}>Loading…</div>
         ) : threads.length === 0 ? (
@@ -137,12 +143,13 @@ function Inbox({ profile }) {
   )
 }
 
-function Thread({ spotId, senderId, onSent }) {
+function Thread({ spotId, spotName, senderId, onSent, onThreadDeleted }) {
   const [msgs, setMsgs]       = useState([])
   const [loading, setLoading] = useState(true)
   const [draft, setDraft]     = useState('')
   const [sending, setSending] = useState(false)
   const [error, setError]     = useState('')
+  const [confirmThread, setConfirmThread] = useState(false)
   const scrollRef = useRef(null)
 
   async function load(markRead = false) {
@@ -185,12 +192,27 @@ function Thread({ spotId, senderId, onSent }) {
 
   const canSend = !!draft.trim() && !sending
 
+  async function removeMessage(id) {
+    // Optimistic: the row is gone from view immediately, and a failed delete
+    // reappears on the next poll rather than leaving a dead row on screen.
+    setMsgs(prev => prev.filter(m => m.id !== id))
+    const { error: err } = await supabase.rpc('delete_message', { p_id: id })
+    if (err) { setError(err.message); load() }
+    else onSent?.()
+  }
+
+  async function removeThread() {
+    const { error: err } = await supabase.rpc('delete_thread', { p_spot_id: spotId })
+    if (err) return setError(err.message)
+    onThreadDeleted?.()
+  }
+
   return (
     <div style={{ background:C.card, border:`1px solid ${C.border}`, borderRadius:16, overflow:'hidden', animation:'up 0.3s ease' }}>
       <div ref={scrollRef} style={{ maxHeight:'55vh', minHeight:240, overflowY:'auto', padding:'20px 22px', display:'flex', flexDirection:'column', gap:12 }}>
         {loading
           ? <div style={{ fontSize:13.5, color:C.muted }}>Loading…</div>
-          : msgs.map(m => <Bubble key={m.id} m={m} mine={m.sender_role === 'admin'} />)}
+          : msgs.map(m => <Bubble key={m.id} m={m} mine={m.sender_role === 'admin'} onDelete={()=>removeMessage(m.id)} />)}
       </div>
 
       <div style={{ padding:'14px 22px 18px', borderTop:`1px solid ${C.border}`, background:C.bg }}>
@@ -209,14 +231,46 @@ function Thread({ spotId, senderId, onSent }) {
             {sending ? '…' : 'Send'}
           </button>
         </div>
+
+        <div style={{ marginTop:12, display:'flex', justifyContent:'flex-end' }}>
+          {confirmThread ? (
+            <span style={{ display:'flex', alignItems:'center', gap:9, fontSize:12.5, color:C.mid }}>
+              Delete all {msgs.length} messages with {spotName}?
+              <button onClick={removeThread}
+                style={{ background:C.rose, border:'none', borderRadius:9, padding:'6px 13px', fontSize:12.5, fontWeight:600, color:'#fff' }}>
+                Delete
+              </button>
+              <button onClick={()=>setConfirmThread(false)}
+                style={{ background:'none', border:'none', fontSize:12.5, color:C.muted, padding:'6px 4px' }}>
+                Cancel
+              </button>
+            </span>
+          ) : (
+            <button onClick={()=>setConfirmThread(true)}
+              style={{ background:'none', border:'none', fontSize:12.5, color:C.muted, padding:'4px' }}>
+              Delete conversation
+            </button>
+          )}
+        </div>
       </div>
     </div>
   )
 }
 
-function Bubble({ m, mine }) {
+function Bubble({ m, mine, onDelete }) {
+  const [hover, setHover] = useState(false)
   return (
-    <div style={{ display:'flex', justifyContent: mine ? 'flex-end' : 'flex-start' }}>
+    <div
+      onMouseEnter={()=>setHover(true)}
+      onMouseLeave={()=>setHover(false)}
+      style={{ display:'flex', justifyContent: mine ? 'flex-end' : 'flex-start', alignItems:'center', gap:8 }}
+    >
+      {mine && onDelete && (
+        <button onClick={onDelete} title="Delete message"
+          style={{ background:'none', border:'none', fontSize:15, color:C.muted, opacity:hover?1:0, transition:'opacity 0.15s', padding:'2px 4px', flexShrink:0 }}>
+          ×
+        </button>
+      )}
       <div style={{ maxWidth:'78%' }}>
         <div style={{
           background: mine ? C.amberSoft : C.bg,
@@ -231,6 +285,12 @@ function Bubble({ m, mine }) {
           {mine ? 'You' : 'Owner'} · {timeAgo(m.created_at)}
         </div>
       </div>
+      {!mine && onDelete && (
+        <button onClick={onDelete} title="Delete message"
+          style={{ background:'none', border:'none', fontSize:15, color:C.muted, opacity:hover?1:0, transition:'opacity 0.15s', padding:'2px 4px', flexShrink:0 }}>
+          ×
+        </button>
+      )}
     </div>
   )
 }
